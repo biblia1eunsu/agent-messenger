@@ -1,0 +1,2173 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#F6F1FF" />
+<title>똑똑 연산 · 매일 한 걸음</title>
+<!--
+  ================================================================
+  똑똑 연산 (Smart Math) — 초1 ~ 고3 스마트 연산 학습 웹앱 (단일 파일)
+  ----------------------------------------------------------------
+  - 프론트엔드: HTML + Tailwind CSS(CDN) + Vanilla JS, 수식 렌더링은 KaTeX(CDN)
+  - 손글씨 인식: 외부 API 없이 브라우저 안에서 동작하는 경량 인식기
+      (획 → 글자 분할 → 64px 재래스터화 → 16x16 특징 벡터 → KNN 코사인 유사도)
+      + 학생별 "내 글씨 학습" (정답 제출 시 자동으로 개인 템플릿 축적)
+  - 저장소: StorageAdapter 추상화
+      · LocalStore  : 브라우저 LocalStorage (기본, 오프라인 동작)
+      · SupabaseStore: Supabase REST(PostgREST) 연동 예시 (설정 화면에서 URL/anon key 입력 시 활성화)
+      · HybridStore : 로컬 우선 저장 + 클라우드 동기화 (기기 간 ?user= 링크 공유 가능)
+  - 개인 링크:  index.html?user=<학생ID>
+  ================================================================
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          jua: ['Jua', 'Gowun Dodum', 'system-ui', 'sans-serif'],
+          body: ['Gowun Dodum', 'Apple SD Gothic Neo', 'Noto Sans KR', 'system-ui', 'sans-serif'],
+        },
+        colors: {
+          cream: '#FFFBF5',
+          lav: { 50: '#F6F1FF', 100: '#ECE4FF', 200: '#DCCFFF', 300: '#C4B2FA', 400: '#A792F0', 500: '#8C74E0', 600: '#7059C4', 700: '#58449C' },
+          mint: { 50: '#EEFBF4', 100: '#D6F5E4', 200: '#B3EBCF', 300: '#86DDB3', 400: '#55C893', 500: '#2FAE77', 600: '#238A5E' },
+          peach: { 50: '#FFF4EC', 100: '#FFE6D5', 200: '#FFCFB1', 300: '#FFB38A', 400: '#FF9563', 500: '#F07A45' },
+          rose: { 50: '#FFF1F3', 100: '#FFE0E5', 200: '#FFC4CE', 300: '#FF9EAE', 400: '#F7758C', 500: '#E4566F' },
+          sky: { 50: '#EFF8FF', 100: '#DDF0FF', 200: '#BFE3FF', 300: '#93CFFA', 400: '#62B4F0', 500: '#3E97DB' },
+          butter: { 50: '#FFFCEB', 100: '#FFF6C7', 200: '#FFEE9A', 300: '#FFE06A', 400: '#F8CC3C' },
+          ink: { 400: '#8A84A3', 500: '#6B6585', 600: '#4F4968', 700: '#37324D', 800: '#26223A' },
+        },
+        boxShadow: {
+          soft: '0 10px 30px -12px rgba(112, 89, 196, 0.25)',
+          pop: '0 6px 0 0 rgba(112, 89, 196, 0.25)',
+        },
+      },
+    },
+  };
+</script>
+<style>
+  :root { color-scheme: light; }
+  html, body { background: #FFFBF5; }
+  body {
+    font-family: 'Gowun Dodum', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
+    color: #37324D;
+    -webkit-tap-highlight-color: transparent;
+    background-image:
+      radial-gradient(circle at 10% 0%, #F1EAFF 0, transparent 40%),
+      radial-gradient(circle at 100% 20%, #E3F6FF 0, transparent 35%),
+      radial-gradient(circle at 50% 100%, #FFF0E6 0, transparent 40%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    overscroll-behavior: none;
+  }
+  .font-jua { font-family: 'Jua', 'Gowun Dodum', system-ui, sans-serif; letter-spacing: 0.01em; }
+  .card { background: rgba(255,255,255,.88); border-radius: 1.5rem; box-shadow: 0 10px 30px -14px rgba(112,89,196,.28); border: 1px solid #EFE8FF; }
+  .btn { transition: transform .08s ease, box-shadow .08s ease, background .2s; user-select: none; -webkit-user-select: none; }
+  .btn:active { transform: translateY(2px) scale(.98); }
+  .btn-3d { box-shadow: 0 5px 0 0 rgba(0,0,0,.12); }
+  .btn-3d:active { box-shadow: 0 2px 0 0 rgba(0,0,0,.12); transform: translateY(3px); }
+  .ink-canvas { touch-action: none; display: block; width: 100%; height: 100%; cursor: crosshair; }
+  .paper {
+    background-color: #FFFFFF;
+    background-image: linear-gradient(#EEF1FF 1px, transparent 1px), linear-gradient(90deg, #EEF1FF 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  .answer-paper {
+    background: #FFFFFF;
+    background-image: linear-gradient(to bottom, transparent 72%, #E7DEFF 72%, #E7DEFF calc(72% + 2px), transparent calc(72% + 2px));
+  }
+  .no-select { user-select: none; -webkit-user-select: none; }
+  .fade-in { animation: fadeIn .25s ease both; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .pop-in { animation: popIn .35s cubic-bezier(.2,1.4,.4,1) both; }
+  @keyframes popIn { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+  .shake { animation: shake .4s ease; }
+  @keyframes shake { 0%,100%{transform:none} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
+  .sheet { animation: sheetUp .3s cubic-bezier(.2,1,.3,1) both; }
+  @keyframes sheetUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .confetti { position: fixed; top: -40px; font-size: 28px; pointer-events: none; z-index: 80; animation: fall linear forwards; }
+  @keyframes fall { to { transform: translateY(110vh) rotate(540deg); opacity: .8; } }
+  .heat { width: 14px; height: 14px; border-radius: 4px; }
+  @media (min-width: 640px) { .heat { width: 16px; height: 16px; } }
+  .katex { font-size: 1.08em; }
+  .problem-expr .katex { font-size: 1.9em; }
+  @media (min-width: 768px) { .problem-expr .katex { font-size: 2.3em; } }
+  .step-item .katex, .hint .katex { font-size: 1.05em; }
+  .scroll-thin::-webkit-scrollbar { height: 6px; width: 6px; }
+  .scroll-thin::-webkit-scrollbar-thumb { background: #DCCFFF; border-radius: 99px; }
+  .chip-cycle { transition: background .15s; }
+  input, select, textarea { font-family: inherit; }
+  .toast { animation: toastIn .25s ease both; }
+  @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+  .ring-track { stroke: #EFE8FF; }
+  .pulse-soft { animation: pulseSoft 2.2s ease-in-out infinite; }
+  @keyframes pulseSoft { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+  .solve-grid { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .solve-grid { grid-template-columns: minmax(0, 1.25fr) minmax(340px, 1fr); } }
+</style>
+</head>
+<body class="antialiased">
+  <div id="app" class="min-h-screen pb-10"></div>
+  <div id="overlay-root"></div>
+  <div id="toast-root"></div>
+<script>
+'use strict';
+/* =====================================================================
+ * 1. 수학 유틸리티
+ * ===================================================================== */
+const R = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const nz = (a, b) => { let v; do { v = R(a, b); } while (v === 0); return v; };
+const shuffle = (arr) => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const gcd = (a, b) => { a = Math.abs(a); b = Math.abs(b); while (b) { [a, b] = [b, a % b]; } return a || 1; };
+const lcm = (a, b) => Math.abs(a * b) / gcd(a, b);
+const fact = (n) => { let r = 1; for (let i = 2; i <= n; i++) r *= i; return r; };
+const nPr = (n, r) => { let x = 1; for (let i = 0; i < r; i++) x *= (n - i); return x; };
+const nCr = (n, r) => Math.round(nPr(n, r) / fact(r));
+const digits = (n) => String(Math.abs(n)).split('').reverse().map(Number); // 일의 자리부터
+const PLACES = ['일', '십', '백', '천', '만'];
+const par = (n) => (n < 0 ? `(${n})` : `${n}`); // 음수에 괄호
+const sgnNum = (n) => (n < 0 ? `- ${-n}` : `+ ${n}`);
+
+/** 분수 클래스 (항상 기약분수, 분모 양수) */
+class F {
+  constructor(n, d = 1) {
+    if (d === 0) throw new Error('division by zero');
+    if (d < 0) { n = -n; d = -d; }
+    const g = gcd(n, d); this.n = n / g; this.d = d / g;
+    if (Object.is(this.n, -0)) this.n = 0;
+  }
+  static of(x) { return x instanceof F ? x : new F(x, 1); }
+  add(o) { o = F.of(o); return new F(this.n * o.d + o.n * this.d, this.d * o.d); }
+  sub(o) { o = F.of(o); return new F(this.n * o.d - o.n * this.d, this.d * o.d); }
+  mul(o) { o = F.of(o); return new F(this.n * o.n, this.d * o.d); }
+  div(o) { o = F.of(o); return new F(this.n * o.d, this.d * o.n); }
+  neg() { return new F(-this.n, this.d); }
+  inv() { return new F(this.d, this.n); }
+  val() { return this.n / this.d; }
+  isInt() { return this.d === 1; }
+  toString() { return this.d === 1 ? `${this.n}` : `${this.n}/${this.d}`; }
+  tex() { if (this.d === 1) return `${this.n}`; return `${this.n < 0 ? '-' : ''}\\frac{${Math.abs(this.n)}}{${this.d}}`; }
+  mixedTex() {
+    const a = Math.abs(this.n); if (this.d === 1 || a < this.d) return this.tex();
+    const w = Math.floor(a / this.d), r = a % this.d;
+    return `${this.n < 0 ? '-' : ''}${w}${r ? `\\frac{${r}}{${this.d}}` : ''}`;
+  }
+}
+const fr = (n, d = 1) => new F(n, d);
+const sfr = (n, d) => (d === 0 ? null : new F(n, d)); // 오답 함정용 (분모 0이면 제외)
+const ftex = (n, d) => fr(n, d).tex();
+
+/** 다항식 TeX: coefs = [최고차, ..., 상수] */
+function poly(coefs, v = 'x') {
+  const deg = coefs.length - 1; let s = '';
+  coefs.forEach((c0, i) => {
+    const c = F.of(c0); const p = deg - i; if (c.n === 0) return;
+    const abs = new F(Math.abs(c.n), c.d);
+    const coefTex = (abs.n === 1 && abs.d === 1 && p > 0) ? '' : abs.tex();
+    const term = coefTex + (p > 0 ? v : '') + (p > 1 ? `^{${p}}` : '');
+    if (s === '') s = (c.n < 0 ? '-' : '') + term; else s += (c.n < 0 ? ' - ' : ' + ') + term;
+  });
+  return s || '0';
+}
+/** ax + by 꼴 */
+function lin2(a, b, x = 'x', y = 'y') {
+  const t = (c, v, first) => {
+    if (c === 0) return '';
+    const abs = Math.abs(c) === 1 ? '' : Math.abs(c);
+    return first ? `${c < 0 ? '-' : ''}${abs}${v}` : ` ${c < 0 ? '-' : '+'} ${abs}${v}`;
+  };
+  const s = t(a, x, true); return s + t(b, y, s === '');
+}
+/** 복소수 a+bi TeX */
+function cpx(a, b) {
+  if (b === 0) return `${a}`;
+  const bi = (Math.abs(b) === 1 ? '' : Math.abs(b)) + 'i';
+  if (a === 0) return (b < 0 ? '-' : '') + bi;
+  return `${a} ${b < 0 ? '-' : '+'} ${bi}`;
+}
+/** 소수 표기: v / 10^p */
+const dec = (v, p) => String(+(v / 10 ** p).toFixed(p));
+/** 소인수분해 TeX */
+function pfTex(n) {
+  const f = []; let m = n;
+  for (let p = 2; p * p <= m; p++) { let e = 0; while (m % p === 0) { m /= p; e++; } if (e) f.push(e > 1 ? `${p}^{${e}}` : `${p}`); }
+  if (m > 1) f.push(`${m}`);
+  return f.join(' \\times ');
+}
+
+/* ---------- 세로셈 풀이 과정 도우미 ---------- */
+function colAddSteps(a, b) {
+  const steps = []; let carry = 0; const da = digits(a), db = digits(b); const n = Math.max(da.length, db.length);
+  steps.push(`자리를 맞춰 세로로 써요. 일의 자리부터 차례로 더해요.`);
+  for (let i = 0; i < n; i++) {
+    const x = da[i] || 0, y = db[i] || 0; const s = x + y + carry;
+    let t = `<b>${PLACES[i]}의 자리</b>: $${x} + ${y}${carry ? ' + 1' : ''} = ${s}$`;
+    if (carry) t += ` <span class="text-ink-400">(받아올린 1 포함)</span>`;
+    t += s >= 10 ? ` → <b>${s % 10}</b>을(를) 쓰고 <b>1</b>을 윗자리로 받아올려요.` : ` → <b>${s}</b>을(를) 써요.`;
+    carry = s >= 10 ? 1 : 0; steps.push(t);
+  }
+  if (carry) steps.push(`마지막에 받아올린 <b>1</b>을 맨 앞자리에 써요.`);
+  steps.push(`그래서 $${a} + ${b} = ${a + b}$ 이에요.`);
+  return steps;
+}
+function colSubSteps(a, b) {
+  const steps = []; const da = digits(a), db = digits(b); let borrow = 0;
+  steps.push(`자리를 맞춰 세로로 써요. 일의 자리부터 빼요.`);
+  for (let i = 0; i < da.length; i++) {
+    const orig = da[i]; let x = orig - borrow; const y = db[i] || 0;
+    let t = `<b>${PLACES[i]}의 자리</b>: `;
+    if (borrow) t += `아랫자리에 10을 빌려줬으니 $${orig} \\to ${x < 0 ? 9 : x}$${x < 0 ? ' (0이라서 다시 윗자리에서 빌려와요)' : ''}. `;
+    if (x < 0) { x += 10; borrow = 1; if (x < y) { /* not possible for single digits */ } }
+    else if (x < y) { t += `$${x}$에서 $${y}$을(를) 뺄 수 없으니 윗자리에서 10을 빌려와요: $10 + ${x} - ${y} = ${10 + x - y}$`; borrow = 1; steps.push(t); continue; }
+    else borrow = 0;
+    if (i >= db.length && y === 0 && x === 0 && i === da.length - 1) { t += '남는 수가 없어요.'; steps.push(t); continue; }
+    t += `$${x} - ${y} = ${x - y}$`; steps.push(t);
+  }
+  steps.push(`그래서 $${a} - ${b} = ${a - b}$ 이에요.`);
+  return steps;
+}
+function noCarryAdd(a, b) { const da = digits(a), db = digits(b); const n = Math.max(da.length, db.length); let r = 0; for (let i = n - 1; i >= 0; i--) r = r * 10 + (((da[i] || 0) + (db[i] || 0)) % 10); return r; }
+function smallFromLarge(a, b) { const da = digits(a), db = digits(b); let r = 0; for (let i = da.length - 1; i >= 0; i--) r = r * 10 + Math.abs((da[i] || 0) - (db[i] || 0)); return r; }
+function noCarryMul(a, k) { const da = digits(a); let s = ''; for (let i = 0; i < da.length; i++) { const p = da[i] * k; s = (i === da.length - 1 ? String(p) : String(p % 10)) + s; } return Number(s); }
+
+/* =====================================================================
+ * 2. 문제 뱅크 (학년 → 단원 → 난이도별 무작위 생성기)
+ *   생성기 반환 형식:
+ *   { prompt, expr, ans, type('num'|'pair'|'set'), hint, steps[], traps[[오답, 짚어줄 개념 실수]] }
+ *   - prompt/steps/hint 안의 $...$ 는 KaTeX 로 렌더링
+ * ===================================================================== */
+function mk(o) {
+  return {
+    prompt: o.prompt || '계산해 보세요.', expr: o.expr || '', ans: String(o.ans), type: o.type || 'num',
+    hint: o.hint || '', steps: o.steps || [], traps: (o.traps || []).filter(([v]) => v !== null && v !== undefined).map(([v, m]) => [String(v), m]),
+    format: o.format || '',
+  };
+}
+
+const GRADE_NAMES = ['', '초1', '초2', '초3', '초4', '초5', '초6', '중1', '중2', '중3', '고1', '고2', '고3'];
+const GRADE_LONG = ['', '초등 1학년', '초등 2학년', '초등 3학년', '초등 4학년', '초등 5학년', '초등 6학년', '중학 1학년', '중학 2학년', '중학 3학년', '고등 1학년', '고등 2학년', '고등 3학년'];
+const LEVELS = ['하', '중', '상'];
+const UNITS = []; // {id, g, name, desc, gen}
+const U = (g, id, name, desc, gen) => UNITS.push({ g, id, name, desc, gen });
+const unitById = (id) => UNITS.find((u) => u.id === id);
+const unitsOf = (g) => UNITS.filter((u) => u.g === g);
+
+/* ---------------------------- 초등 1학년 ---------------------------- */
+U(1, 'e1-add', '한 자리 수의 덧셈', '10 만들기로 더하기', (d) => {
+  if (d === 2) {
+    const a = R(1, 9), b = R(1, 9), c = R(1, 9), s = a + b + c;
+    return mk({ prompt: '세 수를 더해 보세요.', expr: `${a}+${b}+${c}=\\square`, ans: s,
+      hint: '세 수는 한꺼번에 더하지 말고, 앞의 두 수부터 차례로 더해요.',
+      steps: [`앞의 두 수부터 더해요: $${a}+${b}=${a + b}$`, `그 결과에 남은 수를 더해요: $${a + b}+${c}=${s}$`, `정답은 $${s}$ 이에요. 잘했어요!`],
+      traps: [[a + b, '마지막 수 ' + c + '을(를) 더하는 걸 깜빡했어요.'], [s - 1, '하나를 덜 셌어요. 손가락으로 천천히 다시 세어 봐요.'], [s + 1, '하나를 더 셌어요. 이어 세기를 할 때 시작하는 수는 세지 않아요.']] });
+  }
+  let a, b;
+  if (d === 0) { a = R(1, 8); b = R(1, 9 - a); }
+  else { a = R(2, 9); b = R(11 - a, 9); }
+  const s = a + b;
+  if (d === 0) return mk({ expr: `${a}+${b}=\\square`, ans: s, hint: `${a}에서 시작해서 ${b}만큼 이어 세어 보세요.`,
+    steps: [`큰 수 $${Math.max(a, b)}$에서 시작해요.`, `$${Math.min(a, b)}$만큼 이어 세어요: ${Array.from({ length: Math.min(a, b) }, (_, i) => Math.max(a, b) + i + 1).join(', ')}`, `그래서 $${a}+${b}=${s}$ 이에요.`],
+    traps: [[s - 1, '이어 세기를 할 때 하나를 덜 셌어요.'], [s + 1, '이어 세기를 할 때 시작하는 수까지 세어서 하나가 많아졌어요.'], [Math.abs(a - b), '더하기(+)인데 빼기를 했어요. 기호를 다시 확인해요!']] });
+  const k = 10 - a;
+  return mk({ expr: `${a}+${b}=\\square`, ans: s, hint: `${a}이(가) 10이 되려면 ${k}이(가) 더 필요해요. ${b}을(를) ${k}와(과) 나머지로 갈라 보세요!`,
+    steps: [`$${a}$에 몇을 더하면 10이 될까요? → $${k}$`, `$${b}$를 $${k}$와 $${b - k}$로 갈라요.`, `$${a}+${k}=10$`, `$10+${b - k}=${s}$`, `그래서 $${a}+${b}=${s}$ 이에요.`],
+    traps: [[s - 10, '10을 만든 다음, 만든 10을 빼먹었어요. 10과 남은 수를 합쳐야 해요.'], [s - 1, '하나를 덜 셌어요.'], [s + 1, '하나를 더 셌어요.']] });
+});
+
+U(1, 'e1-sub', '한 자리 수의 뺄셈', '10에서 빼기, 거꾸로 세기', (d) => {
+  if (d === 0) {
+    const a = R(2, 9), b = R(1, a), r = a - b;
+    return mk({ expr: `${a}-${b}=\\square`, ans: r, hint: `${a}에서 ${b}만큼 거꾸로 세어 보세요.`,
+      steps: [`$${a}$에서 시작해서 $${b}$만큼 거꾸로 세어요.`, `${Array.from({ length: b }, (_, i) => a - i - 1).join(', ')}`, `그래서 $${a}-${b}=${r}$ 이에요.`],
+      traps: [[a + b, '빼기(−)인데 더했어요. 기호를 꼭 확인해요!'], [r + 1, '거꾸로 셀 때 하나를 덜 셌어요.']] });
+  }
+  if (d === 1) {
+    const a = R(11, 18), o = a - 10, b = R(o + 1, 9), r = a - b;
+    return mk({ expr: `${a}-${b}=\\square`, ans: r, hint: `일의 자리 ${o}에서 ${b}을(를) 뺄 수 없어요. 10에서 먼저 빼 보세요!`,
+      steps: [`$${a}$를 $10$과 $${o}$로 갈라요.`, `10에서 먼저 빼요: $10-${b}=${10 - b}$`, `남은 $${o}$를 더해요: $${10 - b}+${o}=${r}$`, `그래서 $${a}-${b}=${r}$ 이에요.`],
+      traps: [[10 + (b - o), '일의 자리에서 큰 수에서 작은 수를 거꾸로 뺐어요. 뺄 수 없을 땐 10에서 빼야 해요.'], [a + b, '빼기(−)인데 더했어요.'], [b - o, '10을 가르고 난 뒤 계산이 헷갈렸어요. 10에서 먼저 빼 봐요.']] });
+  }
+  const a = 10 * R(2, 4) + R(0, 8), a0 = a % 10, b = R(a0 + 1, 9), r = a - b;
+  return mk({ expr: `${a}-${b}=\\square`, ans: r, hint: '일의 자리끼리 뺄 수 없으면 십의 자리에서 10을 빌려와요(받아내림).',
+    steps: colSubSteps(a, b), traps: [[smallFromLarge(a, b), '일의 자리에서 작은 수에서 큰 수를 거꾸로 뺐어요. 십의 자리에서 10을 빌려와야 해요!'], [r + 10, '10을 빌려왔으면 십의 자리 숫자를 1 줄여야 해요.']] });
+});
+
+U(1, 'e1-2d', '두 자리 수 덧셈·뺄셈', '받아올림·받아내림 없는 계산', (d) => {
+  if (d === 0) {
+    const a = 10 * R(1, 8) + R(0, 5), b = R(1, 9 - (a % 10)), s = a + b;
+    return mk({ expr: `${a}+${b}=\\square`, ans: s, hint: '한 자리 수는 일의 자리끼리 더해요.', steps: colAddSteps(a, b),
+      traps: [[a + b * 10, '한 자리 수를 십의 자리에 더했어요. 일의 자리끼리 줄을 맞춰요!']] });
+  }
+  if (d === 1) {
+    const a1 = R(1, 8), b1 = R(1, 9 - a1), a0 = R(0, 8), b0 = R(0, 9 - a0), a = a1 * 10 + a0, b = b1 * 10 + b0;
+    return mk({ expr: `${a}+${b}=\\square`, ans: a + b, hint: '일의 자리끼리, 십의 자리끼리 더해요.', steps: colAddSteps(a, b), traps: [] });
+  }
+  const b1 = R(1, 7), a1 = R(b1 + 1, 9), b0 = R(0, 8), a0 = R(b0, 9), a = a1 * 10 + a0, b = b1 * 10 + b0;
+  return mk({ expr: `${a}-${b}=\\square`, ans: a - b, hint: '일의 자리끼리, 십의 자리끼리 빼요.', steps: colSubSteps(a, b), traps: [[a + b, '빼기인데 더했어요!']] });
+});
+
+/* ---------------------------- 초등 2학년 ---------------------------- */
+U(2, 'e2-add', '받아올림이 있는 덧셈', '두 자리 수의 덧셈', (d) => {
+  let a, b;
+  if (d === 0) { a = R(1, 8) * 10 + R(2, 9); b = R(10 - (a % 10), 9); }
+  else if (d === 1) { const a0 = R(2, 9), b0 = R(10 - a0, 9), a1 = R(1, 7), b1 = R(1, 8 - a1); a = a1 * 10 + a0; b = b1 * 10 + b0; }
+  else { const a0 = R(2, 9), b0 = R(10 - a0, 9), a1 = R(2, 9), b1 = R(Math.max(1, 9 - a1), 9); a = a1 * 10 + a0; b = b1 * 10 + b0; }
+  return mk({ expr: `${a}+${b}=\\square`, ans: a + b, hint: '일의 자리의 합이 10이 넘으면 10을 십의 자리로 받아올려요.', steps: colAddSteps(a, b),
+    traps: [[noCarryAdd(a, b), '받아올림한 1을 윗자리에 더하는 걸 잊었어요. 일의 자리 합이 10 이상이면 꼭 1을 올려 줘요!'], [a + b - 10, '받아올림한 1을 빠뜨렸어요.'], [a + b + 10, '받아올림을 두 번 했어요.']] });
+});
+
+U(2, 'e2-sub', '받아내림이 있는 뺄셈', '두 자리 수의 뺄셈', (d) => {
+  let a, b;
+  if (d === 0) { const a0 = R(0, 8); a = R(2, 9) * 10 + a0; b = R(a0 + 1, 9); }
+  else if (d === 1) { const a0 = R(0, 8), b0 = R(a0 + 1, 9), a1 = R(3, 9), b1 = R(1, a1 - 1); a = a1 * 10 + a0; b = b1 * 10 + b0; }
+  else { const a1 = R(3, 9), b1 = R(1, a1 - 1), b0 = R(1, 9); a = a1 * 10; b = b1 * 10 + b0; }
+  const r = a - b;
+  return mk({ expr: `${a}-${b}=\\square`, ans: r, hint: '일의 자리끼리 뺄 수 없으면 십의 자리에서 10을 빌려와요.', steps: colSubSteps(a, b),
+    traps: [[smallFromLarge(a, b), '일의 자리에서 큰 수에서 작은 수를 거꾸로 뺐어요. 위의 수가 작으면 10을 빌려와야 해요!'], [r + 10, '10을 빌려준 십의 자리 숫자를 1 줄이지 않았어요.']] });
+});
+
+U(2, 'e2-mul', '곱셈구구', '2단 ~ 9단', (d) => {
+  if (d === 2) {
+    const a = R(2, 9), b = R(2, 9), c = a * b;
+    return mk({ prompt: '□에 알맞은 수를 구하세요.', expr: `\\square \\times ${b} = ${c}`, ans: a, hint: `${b}단 곱셈구구에서 곱이 ${c}이(가) 되는 수를 찾아요.`,
+      steps: [`${b}단을 외워 봐요: ${Array.from({ length: 9 }, (_, i) => `$${b}\\times${i + 1}=${b * (i + 1)}$`).join(', ')}`, `$${a}\\times ${b} = ${c}$ 이므로 □ = $${a}$`],
+      traps: [[c - b, '곱셈이 아니라 빼기로 계산했어요.'], [c / a === b ? b : -1, '두 수의 자리를 헷갈렸어요.']] });
+  }
+  const a = d === 0 ? pick([2, 3, 4, 5]) : pick([6, 7, 8, 9]), b = R(2, 9), c = a * b;
+  return mk({ expr: `${a}\\times${b}=\\square`, ans: c, hint: `${a}을(를) ${b}번 더한 것과 같아요.`,
+    steps: [`$${a}\\times${b}$는 $${a}$를 $${b}$번 더한 것이에요.`, `$${Array(b).fill(a).join('+')}=${c}$`, `${a}단: ${Array.from({ length: b }, (_, i) => a * (i + 1)).join(' → ')}`],
+    traps: [[a * (b - 1), `${a}단에서 한 칸 앞의 값이에요. ${a}씩 ${b}번 뛰어 세어 봐요.`], [a * (b + 1), `${a}단에서 한 칸 뒤의 값이에요.`], [a + b, '곱하기(×)인데 더하기를 했어요.']] });
+});
+
+/* ---------------------------- 초등 3학년 ---------------------------- */
+U(3, 'e3-addsub', '세 자리 수 덧셈·뺄셈', '받아올림·받아내림', (d) => {
+  if (d < 2) {
+    let a, b;
+    if (d === 0) { a = R(100, 699); b = R(100, 299); }
+    else { const a0 = R(2, 9); a = R(15, 59) * 10 + a0; b = R(15, 39) * 10 + R(10 - a0, 9); }
+    return mk({ expr: `${a}+${b}=\\square`, ans: a + b, hint: '일의 자리부터 더하고, 10이 넘으면 윗자리로 1을 받아올려요.', steps: colAddSteps(a, b),
+      traps: [[noCarryAdd(a, b), '받아올림을 윗자리에 더하지 않았어요.']] });
+  }
+  const a = R(3, 9) * 100 + R(0, 1) * 10 + R(0, 4), b = R(110, a - 100);
+  return mk({ expr: `${a}-${b}=\\square`, ans: a - b, hint: '빌려올 때 윗자리가 0이면 그 윗자리에서 먼저 빌려와요.', steps: colSubSteps(a, b),
+    traps: [[smallFromLarge(a, b), '각 자리에서 큰 수에서 작은 수를 거꾸로 뺐어요. 위의 수가 작으면 받아내림을 해야 해요!']] });
+});
+
+U(3, 'e3-mul', '곱셈 (×한 자리 수)', '두·세 자리 수 × 한 자리 수', (d) => {
+  let a, k;
+  if (d === 0) { a = R(11, 44); k = R(2, 3); }
+  else if (d === 1) { a = R(13, 98); k = R(3, 9); }
+  else { a = R(102, 989); k = R(3, 9); }
+  const ans = a * k; const da = digits(a);
+  const parts = da.map((x, i) => x * 10 ** i).reverse().filter((x) => x > 0);
+  return mk({ expr: `${a}\\times${k}=\\square`, ans, hint: '자리별로 나눠 곱한 뒤 더해요. 곱이 10을 넘으면 받아올림!',
+    steps: [`$${a}$를 자리별로 나눠요: $${parts.join('+')}$`, ...parts.map((p) => `$${p}\\times${k}=${p * k}$`), `모두 더해요: $${parts.map((p) => p * k).join('+')}=${ans}$`],
+    traps: [[noCarryMul(a, k), '각 자리의 곱에서 받아올림한 수를 윗자리에 더하지 않았어요.'], [a + k, '곱셈인데 더했어요.']] });
+});
+
+U(3, 'e3-div', '나눗셈', '몫과 나머지', (d) => {
+  if (d < 2) {
+    const b = R(2, 9), q = d === 0 ? R(2, 9) : R(11, Math.floor(99 / b)), a = b * q;
+    return mk({ expr: `${a}\\div${b}=\\square`, ans: q, hint: `${b}에 어떤 수를 곱하면 ${a}이(가) 되는지 생각해요.`,
+      steps: d === 0 ? [`$${b}\\times \\square = ${a}$ 를 찾아요.`, `${b}단: $${b}\\times${q}=${a}$`, `그래서 $${a}\\div${b}=${q}$`]
+        : [`$${a}$를 $${Math.floor(q / 10) * 10 * b}$와 $${a - Math.floor(q / 10) * 10 * b}$로 나눠 생각해요.`, `$${Math.floor(q / 10) * 10 * b}\\div${b}=${Math.floor(q / 10) * 10}$`, `$${a - Math.floor(q / 10) * 10 * b}\\div${b}=${q % 10}$`, `더하면 $${Math.floor(q / 10) * 10}+${q % 10}=${q}$`, `확인: $${b}\\times${q}=${a}$ ✓`],
+      traps: [[q + 1, `곱셈으로 확인해 봐요: $${b}\\times${q + 1}=${b * (q + 1)}$ 은 ${a}보다 커요.`], [q - 1, `곱셈으로 확인해 봐요: $${b}\\times${q - 1}=${b * (q - 1)}$ 은 ${a}보다 작아요.`]] });
+  }
+  const b = R(3, 9), q = R(3, 15), r = R(1, b - 1), a = b * q + r;
+  return mk({ prompt: '몫과 나머지를 차례로 쓰세요. (몫, 나머지)', expr: `${a}\\div${b}`, ans: `${q},${r}`, type: 'pair', format: '몫,나머지',
+    hint: `${b}에 곱해서 ${a}을(를) 넘지 않는 가장 큰 수가 몫이에요. 나머지는 항상 ${b}보다 작아요.`,
+    steps: [`$${b}\\times${q}=${b * q}$, $${b}\\times${q + 1}=${b * (q + 1)}$ → ${a}을(를) 넘지 않는 건 $${q}$`, `나머지: $${a}-${b * q}=${r}$`, `확인: $${b}\\times${q}+${r}=${a}$ ✓`, `답: 몫 $${q}$, 나머지 $${r}$`],
+    traps: [[`${r},${q}`, '몫과 나머지 순서가 바뀌었어요. (몫, 나머지) 순서로 써요.'], [`${q - 1},${r + b}`, `나머지가 나누는 수 ${b}보다 크면 몫을 1 더 늘릴 수 있어요.`]] });
+});
+
+/* ---------------------------- 초등 4학년 ---------------------------- */
+U(4, 'e4-mul', '큰 수의 곱셈', '세 자리 × 두 자리', (d) => {
+  const a = d === 0 ? R(12, 99) : d === 1 ? R(102, 499) : R(305, 989), b = d === 0 ? R(11, 49) : R(12, 89);
+  const b0 = b % 10, b1 = Math.floor(b / 10), p1 = a * b0, p2 = a * b1 * 10;
+  return mk({ expr: `${a}\\times${b}=\\square`, ans: a * b, hint: '곱하는 수를 일의 자리와 십의 자리로 나눠서 곱한 다음 더해요. 십의 자리 곱은 한 칸 왼쪽!',
+    steps: [`$${b} = ${b1 * 10} + ${b0}$ 로 나눠요.`, `일의 자리: $${a}\\times${b0}=${p1}$`, `십의 자리: $${a}\\times${b1 * 10}=${p2}$ (한 칸 왼쪽에 쓰기)`, `더해요: $${p1}+${p2}=${a * b}$`],
+    traps: [[p1 + a * b1, '십의 자리 곱을 한 칸 왼쪽(×10)에 쓰지 않았어요. 십의 자리 숫자는 실제로는 ' + b1 * 10 + '이에요!'], [p2, '일의 자리 곱을 더하는 걸 잊었어요.'], [p1, '십의 자리 곱을 빠뜨렸어요.']] });
+});
+
+U(4, 'e4-div', '큰 수의 나눗셈', '두 자리 수로 나누기', (d) => {
+  if (d < 2) {
+    const b = d === 0 ? R(11, 19) : R(12, 35), q = d === 0 ? R(2, 9) : R(11, Math.min(29, Math.floor(999 / b))), a = b * q, est = Math.round(b / 10) * 10;
+    return mk({ expr: `${a}\\div${b}=\\square`, ans: q, hint: `${b}을(를) 약 ${est}(으)로 어림해서 몫을 짐작한 뒤 곱셈으로 확인해요.`,
+      steps: [`$${b}$를 약 $${est}$로 어림해요: $${a}\\div${est}\\approx${(a / est).toFixed(1)}$`, `몫을 $${q}$로 짐작하고 확인해요: $${b}\\times${q}=${a}$ ✓`, `그래서 $${a}\\div${b}=${q}$`],
+      traps: [[q + 1, `$${b}\\times${q + 1}=${b * (q + 1)}$ 으로 ${a}보다 커요. 몫을 줄여 봐요.`], [q - 1, `$${b}\\times${q - 1}=${b * (q - 1)}$ 으로 아직 ${b}만큼 더 나눌 수 있어요.`]] });
+  }
+  const b = R(12, 29), q = R(5, 30), r = R(1, b - 1), a = b * q + r;
+  return mk({ prompt: '몫과 나머지를 차례로 쓰세요. (몫, 나머지)', expr: `${a}\\div${b}`, ans: `${q},${r}`, type: 'pair', format: '몫,나머지',
+    hint: '나머지는 항상 나누는 수보다 작아야 해요.',
+    steps: [`$${b}\\times${q}=${b * q}$ (${a}을(를) 넘지 않는 가장 큰 곱)`, `나머지: $${a}-${b * q}=${r}$ (${b}보다 작으니 OK)`, `확인: $${b}\\times${q}+${r}=${a}$ ✓`],
+    traps: [[`${r},${q}`, '몫과 나머지 순서가 바뀌었어요.']] });
+});
+
+U(4, 'e4-frac', '분모가 같은 분수', '덧셈과 뺄셈', (d) => {
+  const den = R(4, 12);
+  if (d === 0) {
+    const a = R(1, den - 2), b = R(1, den - 1 - a);
+    return mk({ expr: `\\frac{${a}}{${den}}+\\frac{${b}}{${den}}=\\square`, ans: fr(a + b, den), hint: '분모가 같으면 분모는 그대로 두고 분자끼리만 더해요.',
+      steps: [`분모 $${den}$은 조각의 크기라서 그대로예요.`, `분자끼리 더해요: $${a}+${b}=${a + b}$`, `$\\frac{${a + b}}{${den}}${gcd(a + b, den) > 1 ? `=${ftex(a + b, den)}` : ''}$`],
+      traps: [[fr(a + b, 2 * den), '분모끼리도 더했어요! 분모는 조각의 크기라서 더하지 않아요.']] });
+  }
+  if (d === 1) {
+    const a = R(3, den - 1), b = R(1, a - 1);
+    return mk({ expr: `\\frac{${a}}{${den}}-\\frac{${b}}{${den}}=\\square`, ans: fr(a - b, den), hint: '분모는 그대로, 분자끼리 빼요.',
+      steps: [`분모 $${den}$은 그대로 둬요.`, `분자끼리 빼요: $${a}-${b}=${a - b}$`, `$\\frac{${a - b}}{${den}}${gcd(a - b, den) > 1 ? `=${ftex(a - b, den)}` : ''}$`],
+      traps: [[a - b, '분모를 빼먹었어요. 답도 분수예요.']] });
+  }
+  const w1 = R(1, 3), w2 = R(1, 3), a = R(2, den - 1), b = R(den - a + 1 > den - 1 ? den - 1 : den - a + 1, den - 1);
+  const ans = fr(w1 * den + a + w2 * den + b, den);
+  return mk({ prompt: '계산해 보세요. (가분수로 써도 좋아요. 예: 17/5)', expr: `${w1}\\frac{${a}}{${den}}+${w2}\\frac{${b}}{${den}}=\\square`, ans,
+    hint: '자연수끼리, 분수끼리 더해요. 분수 부분이 1을 넘으면 자연수로 올려요.',
+    steps: [`자연수끼리: $${w1}+${w2}=${w1 + w2}$`, `분수끼리: $\\frac{${a}}{${den}}+\\frac{${b}}{${den}}=\\frac{${a + b}}{${den}}=1\\frac{${a + b - den}}{${den}}$`, `합치면: $${w1 + w2}+1\\frac{${a + b - den}}{${den}}=${ans.mixedTex()}$`, `가분수로는 $${ans.tex()}$ 이에요.`],
+    traps: [[fr((w1 + w2) * den + a + b - den, den), '분수 부분이 1보다 커서 받아올린 1을 자연수에 더해야 해요.'], [fr((w1 + w2) * 2 * den + a + b, 2 * den), '분모끼리 더했어요. 분모는 그대로!']] });
+});
+
+U(4, 'e4-dec', '소수의 덧셈·뺄셈', '소수점 맞추기', (d) => {
+  let A, pa, B, pb, op;
+  if (d === 0) { A = R(11, 89); pa = 1; B = R(11, 89); pb = 1; op = '+'; }
+  else if (d === 1) { A = R(11, 99); pa = 1; B = R(11, 199); pb = 2; op = '+'; }
+  else { A = R(2, 9); pa = 0; B = R(101, A * 100 - 1); pb = 2; op = '-'; }
+  const P = Math.max(pa, pb), Ai = A * 10 ** (P - pa), Bi = B * 10 ** (P - pb), res = op === '+' ? Ai + Bi : Ai - Bi;
+  const ans = dec(res, P); const mis = op === '+' ? dec(A + B, P) : (A - B > 0 ? dec(A - B, P) : null);
+  const traps = []; if (mis !== null && mis !== ans) traps.push([mis, '소수점끼리 줄을 맞추지 않고 끝자리를 맞췄어요. 소수점 위치를 세로로 맞춰야 해요!']);
+  return mk({ expr: `${dec(A, pa)} ${op} ${dec(B, pb)} = \\square`, ans, hint: '소수점끼리 세로로 줄을 맞추고, 빈자리는 0으로 채워서 계산해요.',
+    steps: [`소수점 자리를 맞춰요: $${(A / 10 ** pa).toFixed(P)}$ 와 $${(B / 10 ** pb).toFixed(P)}$`, `소수점을 잠시 떼고 자연수처럼: $${Ai} ${op} ${Bi} = ${res}$`, `소수점 아래 ${P}자리에 소수점을 다시 찍어요: $${ans}$`], traps });
+});
+
+/* ---------------------------- 초등 5학년 ---------------------------- */
+function coNum(den, lo, hi) { let n; do { n = R(lo, hi); } while (n === den || gcd(n, den) !== 1); return n; }
+function coprimePair(lo, hi) { let m, n; do { m = R(lo, hi); n = R(lo, hi); } while (m === n || gcd(m, n) !== 1); return [m, n]; }
+U(5, 'e5-gcd', '약수와 배수', '최대공약수·최소공배수', (d) => {
+  const g = d === 0 ? R(2, 6) : R(2, 9), [m, n] = coprimePair(2, d === 2 ? 9 : 7), a = g * m, b = g * n, L = g * m * n;
+  const base = [`$${a} = ${pfTex(a)}$, $${b} = ${pfTex(b)}$ (소인수분해)`, `두 수에 공통으로 들어 있는 부분: $${pfTex(g)} = ${g}$ → 최대공약수`, `$${a} = ${g}\\times${m}$, $${b} = ${g}\\times${n}$ 이고 $${m}$과 $${n}$은 서로소예요.`, `최소공배수 $= ${g}\\times${m}\\times${n} = ${L}$`];
+  if (d === 0) return mk({ prompt: '두 수의 최대공약수를 구하세요.', expr: `${a},\\ ${b}`, ans: g, hint: '두 수를 동시에 나눌 수 있는 가장 큰 수를 찾아요.', steps: base.slice(0, 2),
+    traps: [[L, '이건 최소공배수예요. 최대공약수는 두 수의 공통된 약수 중 가장 큰 수예요.'], [1, '1보다 큰 공약수가 있어요. 두 수를 같이 나눠 봐요.']] });
+  if (d === 1) return mk({ prompt: '두 수의 최소공배수를 구하세요.', expr: `${a},\\ ${b}`, ans: L, hint: '최대공약수 × (남은 수들)로 구하면 빨라요.', steps: base,
+    traps: [[a * b, '두 수를 곱하면 공배수이긴 하지만 가장 작은 공배수는 아니에요. 공통 부분(최대공약수)은 한 번만 곱해요.'], [g, '이건 최대공약수예요.']] });
+  return mk({ prompt: '최대공약수와 최소공배수를 차례로 쓰세요.', expr: `${a},\\ ${b}`, ans: `${g},${L}`, type: 'pair', format: '최대공약수,최소공배수', hint: '공통 부분 = 최대공약수, 공통 부분 × 나머지 = 최소공배수', steps: base,
+    traps: [[`${L},${g}`, '순서가 바뀌었어요. (최대공약수, 최소공배수) 순서예요.'], [`${g},${a * b}`, '최소공배수는 두 수의 곱이 아니라 최대공약수 × 나머지들이에요.']] });
+});
+
+U(5, 'e5-fracdiff', '분모가 다른 분수', '통분하여 더하고 빼기', (d) => {
+  let p, q, a, b, op = d === 2 ? '-' : '+';
+  if (d === 0) { p = R(2, 5); q = p * R(2, 3); } else { [p, q] = coprimePair(2, 9); }
+  a = R(1, p - 1); b = R(1, q - 1);
+  if (op === '-' && a * q <= b * p) { [p, q] = [q, p]; [a, b] = [b, a]; if (a * q <= b * p) { op = '+'; } }
+  const L = lcm(p, q), A = a * (L / p), B = b * (L / q), res = op === '+' ? A + B : A - B, ans = fr(res, L);
+  const traps = [];
+  if (op === '+') traps.push([fr(a + b, p + q), '분자는 분자끼리, 분모는 분모끼리 더하면 안 돼요! 먼저 분모를 같게(통분) 만들어요.']);
+  else if (p !== q && p > q) traps.push([fr(a - b, p - q), '분자끼리, 분모끼리 빼면 안 돼요. 통분부터!']);
+  traps.push([fr(op === '+' ? a + b : a - b, L), '통분할 때 분모만 바꾸고 분자에는 같은 수를 곱하지 않았어요.']);
+  return mk({ expr: `\\frac{${a}}{${p}} ${op} \\frac{${b}}{${q}} = \\square`, ans, hint: `두 분모 ${p}와 ${q}의 최소공배수 ${L}(으)로 통분해요. 분모에 곱한 수만큼 분자에도 곱해요.`,
+    steps: [`분모 $${p}$와 $${q}$의 최소공배수는 $${L}$`, `$\\frac{${a}}{${p}}=\\frac{${a}\\times${L / p}}{${p}\\times${L / p}}=\\frac{${A}}{${L}}$`, `$\\frac{${b}}{${q}}=\\frac{${b}\\times${L / q}}{${q}\\times${L / q}}=\\frac{${B}}{${L}}$`, `분자끼리 계산: $\\frac{${A} ${op} ${B}}{${L}}=\\frac{${res}}{${L}}$`, gcd(res, L) > 1 ? `약분해요: $${ans.tex()}$` : `더 약분되지 않으니 답은 $${ans.tex()}$`], traps });
+});
+
+U(5, 'e5-fracmul', '분수의 곱셈', '분자끼리, 분모끼리', (d) => {
+  if (d === 0) {
+    const b = R(3, 9), a = coNum(b, 1, b - 1), k = R(2, 9), ans = fr(a * k, b);
+    return mk({ expr: `\\frac{${a}}{${b}}\\times ${k}=\\square`, ans, hint: '자연수는 분자에만 곱해요.',
+      steps: [`$\\frac{${a}}{${b}}\\times ${k} = \\frac{${a}\\times ${k}}{${b}} = \\frac{${a * k}}{${b}}$`, `${ans.d !== b ? '약분하면' : '정리하면'} $${ans.tex()}$`],
+      traps: [[fr(a, b), '자연수를 분자와 분모에 모두 곱했어요. 그러면 값이 그대로예요! 분자에만 곱해요.'], [fr(a, b * k), '자연수를 분모에 곱했어요. 곱셈은 분자에 곱해요.']] });
+  }
+  const mk2 = () => { const b = R(2, 9); return [coNum(b, 1, b + 2), b]; };
+  const fracs = d === 1 ? [mk2(), mk2()] : [mk2(), mk2(), mk2()];
+  let ans = fr(1); fracs.forEach(([n, m]) => { ans = ans.mul(fr(n, m)); });
+  const N = fracs.reduce((s, [n]) => s * n, 1), D = fracs.reduce((s, [, m]) => s * m, 1);
+  const texs = fracs.map(([n, m]) => `\\frac{${n}}{${m}}`).join('\\times');
+  const traps = [[fr(fracs[0][0] * fracs[1][1], fracs[0][1] * fracs[1][0]), '두 번째 분수를 뒤집었어요. 뒤집는 건 나눗셈일 때만이에요!']];
+  return mk({ expr: `${texs}=\\square`, ans, hint: '분자는 분자끼리, 분모는 분모끼리 곱해요. 미리 약분하면 계산이 쉬워요.',
+    steps: [`분자끼리 곱해요: $${fracs.map(([n]) => n).join('\\times')}=${N}$`, `분모끼리 곱해요: $${fracs.map(([, m]) => m).join('\\times')}=${D}$`, `$\\frac{${N}}{${D}}${gcd(N, D) > 1 ? `=${ans.tex()}` : ''}$ ${gcd(N, D) > 1 ? `(분자·분모를 ${gcd(N, D)}(으)로 약분)` : ''}`], traps });
+});
+
+U(5, 'e5-decmul', '소수의 곱셈', '소수점 위치 정하기', (d) => {
+  let A, pa, B, pb;
+  if (d === 0) { A = R(2, 9); pa = 1; B = R(2, 9); pb = 0; }
+  else if (d === 1) { A = R(11, 49); pa = 1; B = R(2, 9); pb = 1; }
+  else { A = R(101, 499); pa = 2; B = R(11, 29); pb = 1; }
+  const prod = A * B, P = pa + pb, ans = dec(prod, P);
+  return mk({ expr: `${dec(A, pa)}\\times${dec(B, pb)}=\\square`, ans, hint: '소수점을 떼고 자연수처럼 곱한 다음, 두 수의 소수점 아래 자릿수를 더한 만큼 소수점을 찍어요.',
+    steps: [`소수점을 떼고 곱해요: $${A}\\times${B}=${prod}$`, `소수점 아래 자릿수: $${pa} + ${pb} = ${P}$자리`, `$${prod}$에서 오른쪽부터 ${P}자리 → $${ans}$`],
+    traps: [[dec(prod, P - 1), '소수점 아래 자릿수를 하나 덜 셌어요.'], [dec(prod, P + 1), '소수점 아래 자릿수를 하나 더 셌어요.']] });
+});
+
+U(5, 'e5-order', '자연수의 혼합 계산', '계산 순서 지키기', (d) => {
+  if (d === 0) {
+    const a = R(2, 20), b = R(2, 9), c = R(2, 9);
+    return mk({ expr: `${a}+${b}\\times${c}=\\square`, ans: a + b * c, hint: '곱셈은 덧셈보다 먼저 계산해요!',
+      steps: [`곱셈부터: $${b}\\times${c}=${b * c}$`, `덧셈: $${a}+${b * c}=${a + b * c}$`], traps: [[(a + b) * c, '앞에서부터 차례로 더했어요. 곱셈을 먼저 해야 해요!']] });
+  }
+  if (d === 1) {
+    const a = R(2, 9), b = R(2, 9), c = R(2, 6), e = R(1, (a + b) * c - 1);
+    return mk({ expr: `(${a}+${b})\\times${c}-${e}=\\square`, ans: (a + b) * c - e, hint: '괄호 안 → 곱셈 → 뺄셈 순서예요.',
+      steps: [`괄호 안: $${a}+${b}=${a + b}$`, `곱셈: $${a + b}\\times${c}=${(a + b) * c}$`, `뺄셈: $${(a + b) * c}-${e}=${(a + b) * c - e}$`],
+      traps: [[a + b * c - e, '괄호를 무시했어요. 괄호 안을 가장 먼저 계산해요!']] });
+  }
+  const dd = R(2, 6), k = R(1, 4), a = R(2, 9), c = R(1, 9), b = c + k * dd, e = R(1, 20);
+  return mk({ expr: `${a}\\times(${b}-${c})\\div${dd}+${e}=\\square`, ans: a * k + e, hint: '괄호 → 곱셈·나눗셈(앞에서부터) → 덧셈·뺄셈 순서예요.',
+    steps: [`괄호 안: $${b}-${c}=${b - c}$`, `곱셈: $${a}\\times${b - c}=${a * (b - c)}$`, `나눗셈: $${a * (b - c)}\\div${dd}=${a * k}$`, `덧셈: $${a * k}+${e}=${a * k + e}$`],
+    traps: [[a * k * dd + e, '나눗셈을 빠뜨렸어요.']] });
+});
+
+/* ---------------------------- 초등 6학년 ---------------------------- */
+U(6, 'e6-fracdiv', '분수의 나눗셈', '나누는 수의 역수 곱하기', (d) => {
+  if (d === 0) {
+    const b = R(2, 9), a = coNum(b, 1, b + 3), k = R(2, 6), ans = fr(a, b * k);
+    return mk({ expr: `\\frac{${a}}{${b}}\\div${k}=\\square`, ans, hint: `${k}(으)로 나누는 것은 $\\frac{1}{${k}}$을(를) 곱하는 것과 같아요.`,
+      steps: [`$\\div ${k}$ 는 $\\times\\frac{1}{${k}}$`, `$\\frac{${a}}{${b}}\\times\\frac{1}{${k}}=\\frac{${a}}{${b * k}}${ans.d !== b * k ? `=${ans.tex()}` : ''}$`],
+      traps: [[fr(a * k, b), `${k}을(를) 곱했어요. 나눗셈이니 분모에 곱해야(1/${k}을 곱해야) 해요.`]] });
+  }
+  const b = R(2, 9), dd = R(2, 9), c = coNum(dd, 1, dd + 2);
+  let w = 0; if (d === 2) w = R(1, 2);
+  const a = d === 2 ? coNum(b, 1, b - 1) : coNum(b, 1, b + 2);
+  const first = fr(w * b + a, b), ans = first.div(fr(c, dd));
+  const lhs = d === 2 ? `${w}\\frac{${a}}{${b}}` : `\\frac{${a}}{${b}}`;
+  const steps = []; if (d === 2) steps.push(`대분수를 가분수로: $${w}\\frac{${a}}{${b}}=\\frac{${w * b + a}}{${b}}$`);
+  steps.push(`나누는 수 $\\frac{${c}}{${dd}}$를 뒤집어(역수) 곱해요: $\\frac{${w * b + a}}{${b}}\\times\\frac{${dd}}{${c}}$`, `$=\\frac{${(w * b + a) * dd}}{${b * c}}${gcd((w * b + a) * dd, b * c) > 1 ? `=${ans.tex()}` : ''}$`);
+  return mk({ expr: `${lhs}\\div\\frac{${c}}{${dd}}=\\square`, ans, hint: '나누는 수(뒤의 분수)의 분자와 분모를 바꾼 뒤 곱해요.', steps,
+    traps: [[first.mul(fr(c, dd)), '뒤의 분수를 뒤집지 않고 그냥 곱했어요. 나눗셈은 역수를 곱해요!'], [first.inv().mul(fr(c, dd)), '앞의 분수를 뒤집었어요. 뒤집는 건 나누는 수(뒤의 분수)예요.']] });
+});
+
+U(6, 'e6-decdiv', '소수의 나눗셈', '자연수로 바꿔 나누기', (d) => {
+  let X, px, Y, py, Q, pq;
+  if (d === 0) { const n = R(2, 9); Q = R(2, 19); pq = 1; Y = n; py = 0; X = Q * n; px = 1; }
+  else if (d === 1) { Y = R(2, 9); py = 1; Q = R(2, 12); pq = 0; X = Y * Q; px = 1; }
+  else { Y = R(11, 39); py = 1; Q = R(11, 49); pq = 1; X = Y * Q; px = 2; }
+  const ans = dec(Q, pq), shift = py;
+  const steps = shift ? [`나누는 수가 자연수가 되도록 두 수에 똑같이 $${10 ** shift}$을 곱해요.`, `$${dec(X, px)}\\div${dec(Y, py)} = ${dec(X, px - shift)}\\div${Y}$`, `$${dec(X, px - shift)}\\div${Y}=${ans}$`, `확인: $${dec(Y, py)}\\times${ans}=${dec(X, px)}$ ✓`]
+    : [`자연수 나눗셈처럼 해요: $${X}\\div${Y}=${Q}$`, `몫의 소수점은 나뉘는 수의 소수점 위치에 맞춰 찍어요: $${ans}$`];
+  return mk({ expr: `${dec(X, px)}\\div${dec(Y, py)}=\\square`, ans, hint: '나누는 수를 자연수로 만들려면 두 수에 똑같이 10, 100을 곱해요.', steps,
+    traps: [[dec(Q, pq + 1), '몫의 소수점 위치가 한 자리 틀렸어요. 두 수에 같은 수를 곱했는지 확인해요.'], [dec(Q * 10, pq), '몫의 소수점을 한 자리 덜 옮겼어요.']] });
+});
+
+U(6, 'e6-ratio', '비와 비율', '비율·백분율·비례식', (d) => {
+  if (d === 0) {
+    const [a, b] = [R(1, 9), R(2, 12)];
+    return mk({ prompt: '비율을 분수로 나타내세요.', expr: `${a} : ${b}`, ans: fr(a, b), hint: '(비교하는 양) : (기준량) → 비율 = 비교하는 양 ÷ 기준량',
+      steps: [`기준량은 뒤의 수 $${b}$, 비교하는 양은 앞의 수 $${a}$`, `비율 $=\\frac{${a}}{${b}}${gcd(a, b) > 1 ? `=${ftex(a, b)}` : ''}$`], traps: [[fr(b, a), '기준량(뒤의 수)이 분모가 되어야 해요. 뒤집었어요!']] });
+  }
+  if (d === 1) {
+    const b = pick([20, 25, 40, 50, 200, 250, 400]), a = (b * R(1, 19) * 5) / 100;
+    if (!Number.isInteger(a)) return unitById('e6-ratio').gen(1);
+    const pct = (a * 100) / b;
+    return mk({ prompt: `전체 ${b}명 중 ${a}명은 몇 %인가요? (숫자만 쓰세요)`, expr: `\\frac{${a}}{${b}}\\times100=\\square\\,\\%`, ans: pct, hint: '비율에 100을 곱하면 백분율(%)이에요.',
+      steps: [`비율: $\\frac{${a}}{${b}}=${a / b}$`, `100을 곱해요: $${a / b}\\times100=${pct}$`, `답: $${pct}\\%$`], traps: [[a / b, '비율을 구한 다음 100을 곱하는 걸 잊었어요.']] });
+  }
+  const a = R(2, 9), b = R(2, 9), k = R(2, 6), c = a * k;
+  return mk({ prompt: '□에 알맞은 수를 구하세요.', expr: `${a} : ${b} = ${c} : \\square`, ans: b * k, hint: '비례식에서 (외항의 곱) = (내항의 곱) 이에요.',
+    steps: [`외항의 곱 = 내항의 곱: $${a}\\times\\square = ${b}\\times${c}$`, `$${a}\\times\\square = ${b * c}$`, `$\\square = ${b * c}\\div${a} = ${b * k}$`, `또는 앞의 항이 $${k}$배 → 뒤의 항도 $${b}\\times${k}=${b * k}$`],
+    traps: [[fr(a * c, b), '외항과 내항을 헷갈렸어요. 바깥쪽 두 수의 곱 = 안쪽 두 수의 곱!']] });
+});
+
+/* ---------------------------- 중학 1학년 ---------------------------- */
+U(7, 'm1-int', '정수와 유리수의 계산', '부호 규칙', (d) => {
+  if (d === 0) {
+    const a = nz(-15, 15), b = nz(-15, 15), op = pick(['+', '-']), ans = op === '+' ? a + b : a - b;
+    const bb = b < 0 ? `(${b})` : `(+${b})`, aa = a < 0 ? `(${a})` : `(+${a})`;
+    const steps = op === '-' ? [`빼기는 빼는 수의 부호를 바꿔 더하기로: $${aa}-${bb}=${aa}+(${b < 0 ? '+' : '-'}${Math.abs(b)})$`] : [];
+    const b2 = op === '-' ? -b : b;
+    steps.push(Math.sign(a) === Math.sign(b2) ? `부호가 같으면 절댓값끼리 더하고 공통 부호: $${ans}$` : `부호가 다르면 절댓값의 차 $|${Math.abs(a)}-${Math.abs(b2)}|=${Math.abs(ans)}$ 에 절댓값이 큰 쪽 부호 → $${ans}$`);
+    return mk({ expr: `${aa} ${op} ${bb} = \\square`, ans, hint: op === '-' ? '(−)를 빼는 것은 (+)를 더하는 것과 같아요.' : '부호가 다르면 큰 절댓값에서 작은 절댓값을 빼고, 큰 쪽의 부호를 붙여요.', steps,
+      traps: op === '-' ? [[a + b, '빼기를 더하기로 바꿀 때, 빼는 수의 부호도 바꿔야 해요!']] : [] });
+  }
+  if (d === 1) {
+    const b = nz(-6, 6), c = pick([-5, -4, -3, -2, 2, 3, 4, 5]), k = nz(-6, 6), a = k * c; // a × b ÷ c = k*b
+    const ans = (a * b) / c;
+    const neg = [a, b, c].filter((x) => x < 0).length;
+    return mk({ expr: `${par(a)}\\times${par(b)}\\div${par(c)}=\\square`, ans, hint: '곱셈·나눗셈에서는 음수의 개수가 짝수면 +, 홀수면 − 예요.',
+      steps: [`음수의 개수: ${neg}개 → 부호는 $${neg % 2 ? '-' : '+'}$`, `절댓값끼리: $${Math.abs(a)}\\times${Math.abs(b)}\\div${Math.abs(c)}=${Math.abs(ans)}$`, `답: $${ans}$`],
+      traps: [[-ans, '부호가 틀렸어요. 음수의 개수를 다시 세어 봐요.']] });
+  }
+  const a = R(2, 5), b = R(2, 4), c = nz(-6, 6);
+  const ans = a * a - b * c; // (-a)^2 - b × c
+  return mk({ expr: `(-${a})^{2} - ${b}\\times${par(c)} = \\square`, ans, hint: '거듭제곱 → 곱셈 → 뺄셈 순서예요. (−a)²은 양수예요.',
+    steps: [`거듭제곱: $(-${a})^2=(-${a})\\times(-${a})=${a * a}$`, `곱셈: $${b}\\times${par(c)}=${b * c}$`, `뺄셈: $${a * a}-${par(b * c)}=${ans}$`],
+    traps: [[-a * a - b * c, '(−a)²을 −a²처럼 계산했어요. 괄호가 있으면 부호까지 제곱해서 양수가 돼요!'], [a * a + b * c, `$${b}\\times${par(c)}$의 부호를 다시 확인해요.`]] });
+});
+
+U(7, 'm1-expr', '문자와 식', '식의 값 구하기', (d) => {
+  if (d === 0) {
+    const p = R(2, 9), q = nz(-9, 9), x = R(1, 9);
+    return mk({ prompt: `$x=${x}$일 때, 식의 값을 구하세요.`, expr: `${poly([p, q])}`, ans: p * x + q, hint: '문자 자리에 수를 넣을 때 생략된 곱셈 기호(×)를 살려요.',
+      steps: [`$${p}x$ 는 $${p}\\times x$`, `$${p}\\times${x} ${sgnNum(q)} = ${p * x} ${sgnNum(q)} = ${p * x + q}$`], traps: [[Number(`${p}${x}`) + q, `${p}x는 ${p}와 x를 나란히 쓴 게 아니라 곱셈이에요!`]] });
+  }
+  if (d === 1) {
+    const x = R(-5, -1), p = nz(-6, 6), q = R(-9, 9), ans = x * x + p * x + q;
+    return mk({ prompt: `$x=${x}$일 때, 식의 값을 구하세요.`, expr: poly([1, p, q]), ans, hint: '음수를 대입할 때는 반드시 괄호를 씌워요: $(−2)^2 = 4$',
+      steps: [`괄호를 씌워 대입: $(${x})^2 ${p < 0 ? '-' : '+'} ${Math.abs(p)}\\times(${x}) ${sgnNum(q)}$`, `$= ${x * x} ${p * x < 0 ? '-' : '+'} ${Math.abs(p * x)} ${sgnNum(q)}$`, `$= ${ans}$`],
+      traps: [[-x * x + p * x + q, '음수를 제곱할 때 괄호를 씌우지 않았어요. $(' + x + ')^2 = ' + x * x + '$ 로 양수예요!']] });
+  }
+  const x = nz(-4, 4), y = nz(-4, 4), a = R(1, 3), b = nz(-5, 5), ans = a * x * x - x * y + b * y;
+  return mk({ prompt: `$x=${x},\\ y=${y}$일 때, 식의 값을 구하세요.`, expr: `${a === 1 ? '' : a}x^{2} - xy ${b < 0 ? '-' : '+'} ${Math.abs(b) === 1 ? '' : Math.abs(b)}y`, ans, hint: '각 항을 따로 계산한 다음 합쳐요. 음수는 괄호!',
+    steps: [`$${a === 1 ? '' : a + '\\times'}(${x})^2 = ${a * x * x}$`, `$-(${x})\\times(${y}) = ${-x * y}$`, `$${b}\\times(${y}) = ${b * y}$`, `합: $${a * x * x} ${sgnNum(-x * y)} ${sgnNum(b * y)} = ${ans}$`],
+    traps: [[-a * x * x - x * y + b * y, '음수를 제곱하면 양수예요. 괄호를 씌워서 대입해요.'], [a * x * x + x * y + b * y, '−xy 항의 부호를 놓쳤어요.']] });
+});
+
+U(7, 'm1-lineq', '일차방정식', '이항해서 x 구하기', (d) => {
+  const s = R(-9, 9);
+  if (d === 0) {
+    const a = nz(-9, 9) || 2, b = nz(-15, 15), c = a * s + b;
+    return mk({ prompt: '방정식의 해를 구하세요.', expr: `${poly([a, b])} = ${c}`, ans: s, hint: '상수항을 우변으로 이항(부호 바꾸기)하고, x의 계수로 양변을 나눠요.',
+      steps: [`$${b}$을(를) 우변으로 이항하면 부호가 바뀌어요: $${poly([a, 0])} = ${c} ${sgnNum(-b)}$`, `$${poly([a, 0])} = ${c - b}$`, `양변을 $${a}$(으)로 나눠요: $x = ${s}$`, `검산: $${a}\\times${par(s)} ${sgnNum(b)} = ${c}$ ✓`],
+      traps: [[fr(c + b, a), '이항할 때 부호를 바꾸지 않았어요. 넘어가면 + ↔ − 가 바뀌어요!'], [c - b - a, 'x의 계수로 나눠야 하는데 뺐어요.'], [-s, '마지막에 나눌 때 부호를 다시 확인해요.']] });
+  }
+  if (d === 1) {
+    let a = nz(-7, 9), c = nz(-7, 9); while (a === c) c = nz(-7, 9);
+    const b = R(-12, 12), dd = a * s + b - c * s;
+    return mk({ prompt: '방정식의 해를 구하세요.', expr: `${poly([a, b])} = ${poly([c, dd])}`, ans: s, hint: 'x가 있는 항은 왼쪽, 숫자는 오른쪽으로 모아요. 넘어갈 때 부호가 바뀌어요.',
+      steps: [`x항은 좌변, 상수항은 우변으로 이항: $${a}x ${sgnNum(-c)}x = ${dd} ${sgnNum(-b)}$`, `$${poly([a - c, 0])} = ${dd - b}$`, `$x = ${dd - b} \\div ${par(a - c)} = ${s}$`],
+      traps: [[fr(dd + b, a - c), '상수항을 이항할 때 부호를 바꾸지 않았어요.'], [sfr(dd - b, a + c), 'x항을 이항할 때 부호를 바꾸지 않았어요.']] });
+  }
+  let a = R(2, 5), c = nz(-4, 6); while (a === c) c = nz(-4, 6);
+  const b = nz(-6, 6), e = a * (s - b) - c * s;
+  return mk({ prompt: '방정식의 해를 구하세요.', expr: `${a}(${poly([1, -b])}) = ${poly([c, e])}`, ans: s, hint: '괄호를 먼저 풀 때 괄호 안의 모든 항에 곱해요(분배법칙).',
+    steps: [`분배법칙: $${a}x ${sgnNum(-a * b)} = ${poly([c, e])}$`, `이항: $${a}x ${sgnNum(-c)}x = ${e} ${sgnNum(a * b)}$`, `$${poly([a - c, 0])} = ${e + a * b}$`, `$x = ${s}$`],
+    traps: [[fr(e - b, a - c), '분배법칙에서 괄호 안의 두 번째 항에도 ' + a + '을(를) 곱해야 해요!']] });
+});
+
+U(7, 'm1-prop', '정비례와 반비례', 'y=ax, y=a/x', (d) => {
+  if (d === 0 || d === 2) {
+    const a = nz(-5, 6), p = nz(-4, 5), q = a * p;
+    if (d === 2) {
+      const t = a * R(-6, 6);
+      return mk({ prompt: `$y$가 $x$에 정비례하고 $x=${p}$일 때 $y=${q}$입니다. $y=${t}$일 때 $x$의 값은?`, ans: t / a, hint: '먼저 y = ax에서 a를 구해요.',
+        steps: [`$y=ax$에 대입: $${q}=a\\times${par(p)}$ → $a=${a}$`, `$y=${a}x$ 에 $y=${t}$ 대입: $${t}=${a}x$`, `$x=${t / a}$`], traps: [[t * a, 'x를 구하려면 a로 나눠야 해요.']] });
+    }
+    const r = nz(-6, 8);
+    return mk({ prompt: `$y$가 $x$에 정비례하고 $x=${p}$일 때 $y=${q}$입니다. $x=${r}$일 때 $y$의 값은?`, ans: a * r, hint: '정비례: y = ax 이고, a = y ÷ x',
+      steps: [`$a = ${q}\\div${par(p)} = ${a}$`, `$y = ${a}x$ 에 $x=${r}$: $y = ${a}\\times${par(r)} = ${a * r}$`], traps: [[fr(p * q, r), '반비례(xy 일정)로 계산했어요. 정비례는 y ÷ x가 일정해요.']] });
+  }
+  const p = nz(-6, 6), q = nz(-6, 6), a = p * q, r = pick([2, 3, 4, 6, -2, -3].filter((v) => v !== p));
+  return mk({ prompt: `$y$가 $x$에 반비례하고 $x=${p}$일 때 $y=${q}$입니다. $x=${r}$일 때 $y$의 값은?`, ans: fr(a, r), hint: '반비례: y = a/x 이고, a = x × y (곱이 일정)',
+    steps: [`$a = xy = ${par(p)}\\times${par(q)} = ${a}$`, `$y = \\frac{${a}}{x}$ 에 $x=${r}$: $y = ${fr(a, r).tex()}$`], traps: [[fr(q * r, p), '정비례로 계산했어요. 반비례는 x × y가 일정해요!']] });
+});
+
+/* ---------------------------- 중학 2학년 ---------------------------- */
+U(8, 'm2-exp', '지수법칙', '단항식의 곱셈·나눗셈', (d) => {
+  if (d === 0) {
+    const m = R(2, 9), n = R(2, 9);
+    return mk({ prompt: '□에 알맞은 수를 구하세요.', expr: `a^{${m}}\\times a^{${n}} = a^{\\square}`, ans: m + n, hint: '밑이 같은 거듭제곱의 곱은 지수끼리 더해요.',
+      steps: [`$a^{m}\\times a^{n}=a^{m+n}$`, `$${m}+${n}=${m + n}$`], traps: [[m * n, '곱셈이라고 지수끼리 곱했어요. 지수는 더해요! (a를 m개 + n개 곱한 것)']] });
+  }
+  if (d === 1) {
+    const m = R(2, 5), n = R(2, 4), k = R(1, m * n - 1);
+    return mk({ prompt: '□에 알맞은 수를 구하세요.', expr: `(a^{${m}})^{${n}}\\div a^{${k}} = a^{\\square}`, ans: m * n - k, hint: '(aᵐ)ⁿ = aᵐⁿ, 나눗셈은 지수끼리 빼요.',
+      steps: [`$(a^{${m}})^{${n}}=a^{${m}\\times${n}}=a^{${m * n}}$`, `$a^{${m * n}}\\div a^{${k}}=a^{${m * n}-${k}}=a^{${m * n - k}}$`],
+      traps: [[m + n - k, '(aᵐ)ⁿ에서 지수끼리 더했어요. 거듭제곱의 거듭제곱은 지수를 곱해요!'], [fr(m * n, k), '나눗셈에서 지수끼리 나눴어요. 지수는 빼요!']] });
+  }
+  const c = pick([2, 3]), n = pick([2, 3]), cn = c ** n, divs = [2, 3, 4].filter((v) => cn % v === 0 && v < cn), e = pick(divs), m = R(2, 4), k = R(1, m * n - 1);
+  return mk({ prompt: '계산 결과를 $\\square x^{\\square}$ 꼴로 나타낼 때, 계수와 지수를 차례로 쓰세요.', expr: `(${c}x^{${m}})^{${n}}\\div ${e}x^{${k}}`, ans: `${cn / e},${m * n - k}`, type: 'pair', format: '계수,지수',
+    hint: '계수는 계수끼리, 문자는 지수법칙으로 따로 계산해요. 괄호 밖 지수는 계수에도 적용!',
+    steps: [`$(${c}x^{${m}})^{${n}} = ${c}^{${n}}x^{${m * n}} = ${cn}x^{${m * n}}$`, `계수: $${cn}\\div${e}=${cn / e}$`, `지수: $${m * n}-${k}=${m * n - k}$`, `결과: $${cn / e}x^{${m * n - k}}$`],
+    traps: [[`${(c * n) / e},${m * n - k}`, '괄호 밖 지수 ' + n + '을(를) 계수 ' + c + '에 곱했어요. 계수도 거듭제곱해야 해요: ' + c + '^' + n + ' = ' + cn], [`${c / e},${m * n - k}`, '괄호 밖 지수를 계수에 적용하지 않았어요.']] });
+});
+
+U(8, 'm2-sys', '연립일차방정식', '가감법·대입법', (d) => {
+  const x = R(-6, 6), y = R(-6, 6);
+  let a1, b1, a2, b2;
+  if (d === 0) { a1 = 1; b1 = 1; a2 = 1; b2 = -1; }
+  else { const lim = d === 1 ? 3 : 6; do { a1 = nz(-lim, lim); b1 = nz(-lim, lim); a2 = nz(-lim, lim); b2 = nz(-lim, lim); } while (a1 * b2 - a2 * b1 === 0 || (d === 1 && Math.abs(a1) !== Math.abs(a2) && Math.abs(b1) !== Math.abs(b2))); }
+  const c1 = a1 * x + b1 * y, c2 = a2 * x + b2 * y;
+  const expr = `\\begin{cases} ${lin2(a1, b1)} = ${c1} \\\\ ${lin2(a2, b2)} = ${c2} \\end{cases}`;
+  const L = lcm(Math.abs(a1), Math.abs(a2)), m1 = L / a1, m2 = L / a2, bb = b1 * m1 - b2 * m2, cc = c1 * m1 - c2 * m2;
+  const steps = [
+    `$x$를 없애기 위해 x의 계수를 $${L}$로 맞춰요: ①$\\times${par(m1)}$, ②$\\times${par(m2)}$`,
+    `$${lin2(L, b1 * m1)} = ${c1 * m1}$ 과 $${lin2(L, b2 * m2)} = ${c2 * m2}$`,
+    `두 식을 빼요: $${poly([bb, 0], 'y')} = ${cc}$ → $y = ${y}$`,
+    `$y=${y}$를 첫 번째 식에 대입: $${a1 === 1 ? '' : a1 === -1 ? '-' : a1}x ${sgnNum(b1 * y)} = ${c1}$ → $x = ${x}$`,
+    `해: $x=${x},\\ y=${y}$`];
+  return mk({ prompt: '연립방정식의 해 $x, y$를 차례로 쓰세요.', expr, ans: `${x},${y}`, type: 'pair', format: 'x,y', hint: '한 문자의 계수를 맞춘 뒤 두 식을 더하거나 빼서 없애요(가감법).', steps,
+    traps: x !== y ? [[`${y},${x}`, 'x와 y의 순서가 바뀌었어요. (x, y) 순서로 써요.']] : [] });
+});
+
+U(8, 'm2-ineq', '일차부등식', '부등호 방향 주의', (d) => {
+  const k = R(-6, 8), rels = ['>', '\\geq', '<', '\\leq'];
+  let A, lhs, rhs, relI = R(0, 3);
+  let b = nz(-9, 9), c = 0, e = 0;
+  if (d === 0) A = R(2, 7); else if (d === 1) A = -R(2, 7); else A = nz(-6, 6);
+  if (d < 2) { lhs = poly([A, b]); rhs = `${A * k + b}`; }
+  else { c = nz(-5, 5); const a = A + c; e = A * k + b; lhs = poly([a, b]); rhs = poly([c, e]); if (a === 0) return unitById('m2-ineq').gen(2); }
+  const flip = A < 0; const finalRel = flip ? [2, 3, 0, 1][relI] : relI; // 0:> 1:≥ 2:< 3:≤
+  const wantSmallest = finalRel <= 1; const ans = finalRel === 0 ? k + 1 : finalRel === 1 ? k : finalRel === 2 ? k - 1 : k;
+  const relTex = rels[relI], finTex = rels[finalRel];
+  const steps = [];
+  if (d === 2) steps.push(`x항은 좌변, 상수항은 우변으로 이항: $${poly([A, 0])} ${relTex} ${e - b}$`);
+  else steps.push(`상수항을 이항: $${poly([A, 0])} ${relTex} ${A * k}$`);
+  steps.push(flip ? `양변을 음수 $${A}$로 나누면 <b>부등호 방향이 바뀌어요!</b> → $x ${finTex} ${k}$` : `양변을 양수 $${A}$로 나누면 부등호 방향 그대로 → $x ${finTex} ${k}$`);
+  steps.push(`$x ${finTex} ${k}$를 만족하는 ${wantSmallest ? '가장 작은' : '가장 큰'} 정수는 $${ans}$ ${finalRel % 2 ? '(등호가 있으니 ' + k + '도 포함)' : '(등호가 없으니 ' + k + '은(는) 포함 안 돼요)'}`);
+  const traps = [];
+  if (finalRel % 2 === 0) traps.push([k, `부등호에 등호가 없으니 x = ${k}은(는) 해가 아니에요.`]); else traps.push([wantSmallest ? k + 1 : k - 1, `등호(≥, ≤)가 있으니 ${k}도 해에 포함돼요.`]);
+  if (flip) traps.push([wantSmallest ? k - 1 : k + 1, '음수로 나눌 때 부등호 방향을 바꾸지 않았어요!']);
+  return mk({ prompt: `부등식을 만족하는 ${wantSmallest ? '가장 작은' : '가장 큰'} 정수 $x$를 구하세요.`, expr: `${lhs} ${relTex} ${rhs}`, ans, hint: '일차방정식처럼 풀되, 음수로 곱하거나 나누면 부등호 방향이 반대로 바뀌어요!', steps, traps });
+});
+
+U(8, 'm2-linf', '일차함수', '함숫값·기울기·x절편', (d) => {
+  if (d === 0) {
+    const a = nz(-5, 5), b = R(-9, 9), k = nz(-5, 5);
+    return mk({ prompt: `일차함수 $f(x)=${poly([a, b])}$ 에서 $f(${k})$의 값은?`, ans: a * k + b, hint: 'x 자리에 수를 넣어 계산해요.',
+      steps: [`$f(${k}) = ${a}\\times${par(k)} ${sgnNum(b)}$`, `$= ${a * k} ${sgnNum(b)} = ${a * k + b}$`], traps: [[a * k - b, '상수항의 부호를 다시 확인해요.']] });
+  }
+  if (d === 1) {
+    const m = nz(-4, 4), x1 = R(-5, 3), x2 = x1 + R(1, 4), y1 = R(-6, 6), y2 = y1 + m * (x2 - x1);
+    return mk({ prompt: `두 점 $(${x1}, ${y1})$, $(${x2}, ${y2})$를 지나는 직선의 기울기는?`, ans: m, hint: '기울기 = (y의 증가량) ÷ (x의 증가량)',
+      steps: [`y의 증가량: $${y2} - ${par(y1)} = ${y2 - y1}$`, `x의 증가량: $${x2} - ${par(x1)} = ${x2 - x1}$`, `기울기 $= \\frac{${y2 - y1}}{${x2 - x1}} = ${m}$`],
+      traps: [[fr(x2 - x1, y2 - y1), '분모와 분자가 바뀌었어요. y의 증가량이 분자예요!'], [-m, '빼는 순서를 두 좌표에서 똑같이 맞춰야 해요.']] });
+  }
+  const a = nz(-6, 6), b = nz(-12, 12), ans = fr(-b, a);
+  return mk({ prompt: `일차함수 $y=${poly([a, b])}$ 의 그래프의 $x$절편은?`, ans, hint: 'x절편은 y = 0일 때의 x 값이에요.',
+    steps: [`$y=0$을 대입: $0 = ${poly([a, b])}$`, `$${poly([a, 0])} = ${-b}$`, `$x = ${ans.tex()}$`], traps: [[fr(b, a), 'y=0을 넣고 이항할 때 부호가 바뀌어야 해요.'], [b, '이건 y절편이에요. x절편은 y=0일 때 x예요.']] });
+});
+
+/* ---------------------------- 중학 3학년 ---------------------------- */
+U(9, 'm3-sqrt', '제곱근의 계산', '근호의 곱셈·나눗셈', (d) => {
+  const s = pick([2, 3, 5, 6, 7]);
+  if (d === 0) {
+    const p = R(1, 3), q = R(1, 4), a = s * p * p, b = s * q * q;
+    return mk({ expr: `\\sqrt{${a}}\\times\\sqrt{${b}}=\\square`, ans: s * p * q, hint: '√a × √b = √(ab) 로 합친 다음, 제곱수를 찾아요.',
+      steps: [`$\\sqrt{${a}}\\times\\sqrt{${b}}=\\sqrt{${a * b}}$`, `$${a * b} = ${s * p * q}^2$`, `$\\sqrt{${s * p * q}^2}=${s * p * q}$`], traps: [[a * b, '근호를 벗기지 않았어요. √(ab)는 제곱해서 ab가 되는 양수예요.']] });
+  }
+  if (d === 1) {
+    if (Math.random() < 0.5) {
+      const q = R(1, 3), p = q * R(2, 4), a = s * p * p, b = s * q * q;
+      return mk({ expr: `\\sqrt{${a}}\\div\\sqrt{${b}}=\\square`, ans: p / q, hint: '√a ÷ √b = √(a÷b)', steps: [`$\\sqrt{${a}}\\div\\sqrt{${b}}=\\sqrt{${a / b}}$`, `$=${p / q}$`], traps: [[a / b, '마지막에 근호를 벗기는 걸 잊었어요.']] });
+    }
+    const k = R(2, 5);
+    return mk({ expr: `(${k}\\sqrt{${s}})^{2}=\\square`, ans: k * k * s, hint: '(k√m)² = k² × m 이에요. k도 제곱!', steps: [`$(${k}\\sqrt{${s}})^2 = ${k}^2\\times(\\sqrt{${s}})^2$`, `$= ${k * k}\\times${s} = ${k * k * s}$`],
+      traps: [[k * s, 'k도 제곱해야 해요. (' + k + '√' + s + ')² = ' + k + '² × ' + s], [2 * k * s, '제곱을 ×2로 계산했어요.']] });
+  }
+  const a = R(3, 15), b = R(2, a - 1);
+  return mk({ expr: `(\\sqrt{${a}}+\\sqrt{${b}})(\\sqrt{${a}}-\\sqrt{${b}})=\\square`, ans: a - b, hint: '곱셈공식 (A+B)(A−B) = A² − B² 를 이용해요.',
+    steps: [`$A=\\sqrt{${a}},\\ B=\\sqrt{${b}}$ 라 하면 $(A+B)(A-B)=A^2-B^2$`, `$(\\sqrt{${a}})^2-(\\sqrt{${b}})^2=${a}-${b}=${a - b}$`], traps: [[a + b, '(A+B)(A−B) = A² − B² 이에요. 가운데 부호는 빼기!']] });
+});
+
+U(9, 'm3-expand', '곱셈공식과 인수분해', '전개·인수분해', (d) => {
+  if (d === 0) {
+    const a = nz(-7, 7), b = nz(-7, 7);
+    return mk({ prompt: '전개한 식 $x^2+\\square x+\\square$ 의 두 □를 차례로 쓰세요.', expr: `(${poly([1, a])})(${poly([1, b])})`, ans: `${a + b},${a * b}`, type: 'pair', format: 'x의 계수,상수항',
+      hint: '(x+a)(x+b) = x² + (a+b)x + ab', steps: [`분배법칙: $x\\cdot x + ${par(b)}x + ${par(a)}x + ${par(a)}\\cdot${par(b)}$`, `$= x^2 + (${a}+${par(b)})x + ${a * b}$`, `$= ${poly([1, a + b, a * b])}$`],
+      traps: [[`${a * b},${a + b}`, '순서가 바뀌었어요. x의 계수는 두 수의 합, 상수항은 두 수의 곱이에요.'], [`${a + b},${a + b}`, '상수항은 두 수의 곱이에요.']] });
+  }
+  if (d === 1) {
+    const p = R(1, 4), q = R(2, 4), a = nz(-5, 5), b = nz(-5, 5);
+    return mk({ prompt: '전개한 식 $\\square x^2+\\square x+\\square$ 의 계수를 차례로 쓰세요.', expr: `(${poly([p, a])})(${poly([q, b])})`, ans: `${p * q},${p * b + a * q},${a * b}`, type: 'pair', format: 'x²계수,x계수,상수항',
+      hint: '(px+a)(qx+b) = pq x² + (pb + aq)x + ab', steps: [`$x^2$의 계수: $${p}\\times${q}=${p * q}$`, `$x$의 계수: $${p}\\times${par(b)} + ${par(a)}\\times${q} = ${p * b + a * q}$`, `상수항: $${par(a)}\\times${par(b)}=${a * b}$`, `$= ${poly([p * q, p * b + a * q, a * b])}$`],
+      traps: [[`${p * q},${a + b},${a * b}`, 'x의 계수는 바깥쪽 곱 + 안쪽 곱(pb + aq)이에요. 상수끼리 더하면 안 돼요!']] });
+  }
+  let a = nz(-8, 8), b = nz(-8, 8);
+  return mk({ prompt: '$(x+a)(x+b)$ 로 인수분해할 때, $a, b$를 쓰세요. (순서 무관)', expr: poly([1, a + b, a * b]), ans: `${a},${b}`, type: 'set', format: 'a,b',
+    hint: `곱해서 ${a * b}, 더해서 ${a + b}이(가) 되는 두 수를 찾아요.`, steps: [`곱이 $${a * b}$, 합이 $${a + b}$인 두 수를 찾아요.`, `$${par(a)}\\times${par(b)}=${a * b}$, $${par(a)}+${par(b)}=${a + b}$ ✓`, `$${poly([1, a + b, a * b])} = (${poly([1, a])})(${poly([1, b])})$`],
+    traps: [[`${-a},${-b}`, '두 수의 부호가 반대예요. 합이 ' + (a + b) + '이(가) 되는지 확인해요.']] });
+});
+
+U(9, 'm3-quad', '이차방정식', '인수분해로 풀기', (d) => {
+  if (d < 2) {
+    let r1 = nz(-8, 8), r2 = nz(-8, 8); if (d === 0 && r1 === r2) r2 = r1 + 1 || 2;
+    const expr = d === 0 ? `(${poly([1, -r1])})(${poly([1, -r2])}) = 0` : `${poly([1, -(r1 + r2), r1 * r2])} = 0`;
+    const steps = [];
+    if (d === 1) steps.push(`곱이 $${r1 * r2}$, 합이 $${-(r1 + r2)}$인 두 수: $${-r1}, ${-r2}$ → $(${poly([1, -r1])})(${poly([1, -r2])}) = 0$`);
+    steps.push(`$AB=0$ 이면 $A=0$ 또는 $B=0$`, `$${poly([1, -r1])}=0 \\Rightarrow x=${r1}$`, `$${poly([1, -r2])}=0 \\Rightarrow x=${r2}$`);
+    return mk({ prompt: '이차방정식의 해를 모두 쓰세요. (중근이면 한 번만)', expr, ans: r1 === r2 ? `${r1}` : `${r1},${r2}`, type: 'set', format: '해1,해2',
+      hint: d === 0 ? '(x − a) = 0 이면 x = a 예요. 부호에 주의!' : '인수분해한 다음 각 인수 = 0으로 풀어요.', steps,
+      traps: [[r1 === r2 ? `${-r1}` : `${-r1},${-r2}`, '해의 부호가 반대예요! x − a = 0 이면 x = +a 예요.']] });
+  }
+  const a = R(2, 3), b = nz(-5, 5), c = 1, e = nz(-5, 5); // (ax - b)(cx - e)
+  const A = a * c, B = -(a * e + b * c), C = b * e;
+  const s1 = fr(b, a), s2 = fr(e, c);
+  const ans = s1.val() === s2.val() ? `${s1}` : `${s1},${s2}`;
+  return mk({ prompt: '이차방정식의 해를 모두 쓰세요. (분수는 3/2 처럼)', expr: `${poly([A, B, C])} = 0`, ans, type: 'set', format: '해1,해2', hint: '인수분해: (ax − b)(cx − d) = 0 꼴을 찾아요.',
+    steps: [`인수분해: $(${poly([a, -b])})(${poly([c, -e])}) = 0$`, `$${poly([a, -b])} = 0 \\Rightarrow x = ${s1.tex()}$`, `$${poly([c, -e])} = 0 \\Rightarrow x = ${s2.tex()}$`],
+    traps: [[`${s1.neg()},${s2.neg()}`, '해의 부호가 반대예요.'], [`${b},${e}`, '인수의 x 계수로 나누는 걸 잊었어요.']] });
+});
+
+U(9, 'm3-qf', '이차함수의 꼭짓점', '완전제곱식 만들기', (d) => {
+  const p = nz(-6, 6), q = R(-9, 9);
+  if (d === 0) {
+    const a = nz(-3, 3);
+    return mk({ prompt: '꼭짓점의 좌표 $(p, q)$를 차례로 쓰세요.', expr: `y = ${a === 1 ? '' : a === -1 ? '-' : a}(${poly([1, -p])})^{2} ${sgnNum(q)}`.replace('+ 0', '').replace('- 0', ''), ans: `${p},${q}`, type: 'pair', format: 'p,q',
+      hint: 'y = a(x − p)² + q 의 꼭짓점은 (p, q). 괄호 안 부호와 반대!', steps: [`$y=a(x-p)^2+q$ 꼴과 비교해요.`, `$(${poly([1, -p])}) = (x - ${par(p)})$ → $p = ${p}$`, `$q = ${q}$`, `꼭짓점 $(${p}, ${q})$`],
+      traps: [[`${-p},${q}`, 'p의 부호가 반대예요. (x − p)² 꼴이라서 (x + 3)²이면 p = −3 이에요.']] });
+  }
+  const a = d === 1 ? 1 : pick([2, 3, -1, -2]), B = -2 * a * p, C = a * p * p + q;
+  return mk({ prompt: '꼭짓점의 좌표 $(p, q)$를 차례로 쓰세요.', expr: `y = ${poly([a, B, C])}`, ans: `${p},${q}`, type: 'pair', format: 'p,q', hint: '완전제곱식 a(x − p)² + q 꼴로 바꿔요. p = −b / 2a',
+    steps: [a !== 1 ? `$x^2$의 계수 $${a}$로 묶어요: $y = ${a}(${poly([1, B / a])}) ${sgnNum(C)}$` : `$x$의 계수의 절반의 제곱 $${(B / 2) ** 2}$을(를) 더하고 빼요.`, `$y = ${a === 1 ? '' : a === -1 ? '-' : a}(${poly([1, -p])})^2 ${sgnNum(q)}$`, `꼭짓점 $(${p}, ${q})$ (공식: $p=-\\frac{b}{2a}=${p}$, $q=f(${p})=${q}$)`],
+    traps: [[`${-p},${q}`, 'p의 부호가 반대예요. p = −b / 2a 를 확인해요.'], [`${p},${C}`, 'q는 상수항이 아니라 꼭짓점의 y좌표, f(p)예요.']] });
+});
+
+/* ---------------------------- 고등 1학년 ---------------------------- */
+U(10, 'h1-poly', '다항식의 연산', '덧셈·뺄셈·곱셈', (d) => {
+  if (d === 0) {
+    const A = [nz(-5, 5), nz(-9, 9), R(-9, 9)], B = [nz(-5, 5), nz(-9, 9), R(-9, 9)], k = R(2, 3), j = R(0, 2);
+    const names = ['$x^2$의 계수', '$x$의 계수', '상수항'], ans = A[j] - k * B[j];
+    return mk({ prompt: `$A=${poly(A)}$, $B=${poly(B)}$ 일 때, $A-${k}B$의 ${names[j]}는?`, ans, hint: '빼기 뒤의 괄호를 풀 때 모든 항의 부호가 바뀌어요.',
+      steps: [`$A-${k}B = (${poly(A)}) - ${k}(${poly(B)})$`, `$= ${poly(A)} ${poly(B.map((c) => -k * c)).startsWith('-') ? '' : '+'} ${poly(B.map((c) => -k * c))}$`, `동류항끼리: $${poly(A.map((c, i) => c - k * B[i]))}$`, `${names[j]}: $${ans}$`],
+      traps: [[A[j] + k * B[j], '빼기 뒤 괄호를 풀 때 부호를 바꾸지 않았어요.'], [A[j] - B[j], `B에 ${k}를 곱하는 걸 잊었어요.`]] });
+  }
+  if (d === 1) {
+    const a = nz(-5, 5), b = nz(-6, 6), c = nz(-5, 5), which = R(0, 1);
+    const ans = which ? a * c + b : c + a;
+    return mk({ prompt: `다음 식을 전개했을 때 ${which ? '$x$의 계수' : '$x^2$의 계수'}는?`, expr: `(${poly([1, a, b])})(${poly([1, c])})`, ans, hint: '구하는 차수가 나오는 곱만 골라서 더하면 빨라요.',
+      steps: which ? [`$x$항이 나오는 곱: $${a}x\\times${par(c)}$ 와 $${par(b)}\\times x$`, `$${a * c} + ${par(b)} = ${a * c + b}$`] : [`$x^2$항이 나오는 곱: $x^2\\times${par(c)}$ 와 $${a}x\\times x$`, `$${c} + ${par(a)} = ${c + a}$`],
+      traps: [[which ? a * c : c, '같은 차수가 나오는 곱이 하나 더 있어요. 빠짐없이 찾아요!']] });
+  }
+  const a = nz(-4, 4), which = R(0, 1);
+  return mk({ prompt: `$(${poly([1, a])})^{3}$을 전개했을 때 ${which ? '$x$의 계수' : '$x^2$의 계수'}는?`, ans: which ? 3 * a * a : 3 * a, hint: '(x + a)³ = x³ + 3a x² + 3a² x + a³',
+    steps: [`$(x+a)^3=x^3+3ax^2+3a^2x+a^3$ 에 $a=${a}$`, which ? `$x$의 계수: $3\\times(${a})^2 = ${3 * a * a}$` : `$x^2$의 계수: $3\\times${par(a)} = ${3 * a}$`],
+    traps: [[which ? a * a : a, '곱셈공식에서 계수 3을 빠뜨렸어요.'], [which ? -3 * a * a : -3 * a, '부호를 다시 확인해요.']] });
+});
+
+U(10, 'h1-rem', '나머지정리', 'f(a)로 나머지 구하기', (d) => {
+  const a = nz(-4, 4), b = nz(-6, 6), c = R(-9, 9), k = nz(-3, 3);
+  const f = (x) => x ** 3 + a * x * x + b * x + c;
+  const fx = poly([1, a, b, c]);
+  if (d < 2) {
+    const div = d === 0 ? poly([1, -k]) : poly([1, k]), root = d === 0 ? k : -k;
+    return mk({ prompt: `$f(x)=${fx}$ 를 $${div}$로 나눈 나머지는?`, ans: f(root), hint: `일차식 x − α로 나눈 나머지는 f(α). ${d === 1 ? 'x + k = x − (−k) 예요!' : ''}`,
+      steps: [`$${div}=0$ 이 되는 $x=${root}$`, `나머지 $= f(${root}) = (${root})^3 ${sgnNum(a)}(${root})^2 ${sgnNum(b)}(${root}) ${sgnNum(c)}$`, `$= ${f(root)}$`],
+      traps: [[f(-root), `나누는 식이 ${div}이므로 대입할 값은 ${root}예요. 부호를 반대로 넣었어요.`], [c, '상수항이 곧 나머지는 아니에요. f(α)를 계산해요.']] });
+  }
+  const r = f(k);
+  return mk({ prompt: `$f(x)=x^3+ax^2 ${b < 0 ? '-' : '+'} ${Math.abs(b) === 1 ? '' : Math.abs(b)}x${c ? ' ' + sgnNum(c) : ''}$ 를 $${poly([1, -k])}$로 나눈 나머지가 $${r}$일 때, 상수 $a$의 값은?`, ans: a, hint: '나머지정리: f(k) = (나머지)로 방정식을 세워요.',
+    steps: [`$f(${k}) = ${r}$`, `$(${k})^3 + a(${k})^2 ${sgnNum(b)}\\times${par(k)} ${sgnNum(c)} = ${r}$`, `$${k ** 3} + ${k * k}a ${sgnNum(b * k + c)} = ${r}$`, `$${k * k}a = ${r - k ** 3 - b * k - c}$ → $a = ${a}$`], traps: [[-a, '이항할 때 부호를 확인해요.']] });
+});
+
+U(10, 'h1-cpx', '복소수의 연산', 'i² = −1', (d) => {
+  const a = nz(-6, 6), b = nz(-6, 6), c = nz(-5, 5), e = nz(-5, 5);
+  const pr = '계산 결과를 $a+bi$ 꼴로 나타낼 때 실수부분 $a$와 허수부분 $b$를 차례로 쓰세요.';
+  if (d === 0) {
+    const op = pick(['+', '-']), re = op === '+' ? a + c : a - c, im = op === '+' ? b + e : b - e;
+    return mk({ prompt: pr, expr: `(${cpx(a, b)}) ${op} (${cpx(c, e)})`, ans: `${re},${im}`, type: 'pair', format: '실수부분,허수부분', hint: '실수부분끼리, 허수부분끼리 계산해요.',
+      steps: [`실수부분: $${a} ${op} ${par(c)} = ${re}$`, `허수부분: $${b} ${op} ${par(e)} = ${im}$`, `$= ${cpx(re, im)}$`], traps: op === '-' ? [[`${a + c},${b + e}`, '빼기 뒤 괄호의 부호를 바꾸지 않았어요.']] : [] });
+  }
+  if (d === 1) {
+    const re = a * c - b * e, im = a * e + b * c;
+    return mk({ prompt: pr, expr: `(${cpx(a, b)})(${cpx(c, e)})`, ans: `${re},${im}`, type: 'pair', format: '실수부분,허수부분', hint: '다항식처럼 전개한 뒤 i² = −1 로 바꿔요.',
+      steps: [`전개: $${a * c} + ${par(a * e)}i + ${par(b * c)}i + ${par(b * e)}i^2$`, `$i^2=-1$: $${par(b * e)}i^2 = ${-b * e}$`, `실수부분: $${a * c} ${sgnNum(-b * e)} = ${re}$, 허수부분: $${a * e} ${sgnNum(b * c)} = ${im}$`],
+      traps: [[`${a * c + b * e},${im}`, 'i² = −1 이에요! i²을 +1로 계산했어요.']] });
+  }
+  const p = nz(-4, 4), q = nz(-4, 4), c2 = nz(1, 3), e2 = nz(-3, 3), nr = p * c2 - q * e2, ni = p * e2 + q * c2;
+  return mk({ prompt: pr, expr: `\\frac{${cpx(nr, ni)}}{${cpx(c2, e2)}}`, ans: `${p},${q}`, type: 'pair', format: '실수부분,허수부분', hint: '분모의 켤레복소수를 분모·분자에 곱해서 분모를 실수로 만들어요.',
+    steps: [`분모 $${cpx(c2, e2)}$의 켤레 $${cpx(c2, -e2)}$를 분모·분자에 곱해요.`, `분모: $(${cpx(c2, e2)})(${cpx(c2, -e2)}) = ${c2 * c2} + ${e2 * e2} = ${c2 * c2 + e2 * e2}$`, `분자: $(${cpx(nr, ni)})(${cpx(c2, -e2)}) = ${cpx(nr * c2 + ni * e2, ni * c2 - nr * e2)}$`, `나누면: $${cpx(p, q)}$`],
+    traps: [[`${q},${p}`, '실수부분과 허수부분의 순서가 바뀌었어요.']] });
+});
+
+U(10, 'h1-vieta', '근과 계수의 관계', 'α+β, αβ 활용', (d) => {
+  const r1 = nz(-6, 6), r2 = nz(-6, 6), s = r1 + r2, p = r1 * r2;
+  const expr = `${poly([1, -s, p])} = 0`;
+  const base = [`근과 계수의 관계: $\\alpha+\\beta = -\\frac{b}{a} = ${s}$, $\\alpha\\beta = \\frac{c}{a} = ${p}$`];
+  if (d === 0) {
+    const w = R(0, 1);
+    return mk({ prompt: `이차방정식의 두 근을 $\\alpha, \\beta$라 할 때, ${w ? '$\\alpha\\beta$' : '$\\alpha+\\beta$'}의 값은?`, expr, ans: w ? p : s, hint: 'ax² + bx + c = 0 에서 α+β = −b/a, αβ = c/a', steps: base,
+      traps: w ? [[-p, 'αβ = c/a 에요. 부호를 바꾸지 않아요.']] : [[-s, 'α+β = −b/a 예요. 일차항 계수의 부호를 바꿔야 해요!']] });
+  }
+  if (d === 1) {
+    return mk({ prompt: '두 근을 $\\alpha, \\beta$라 할 때, $\\alpha^2+\\beta^2$의 값은?', expr, ans: s * s - 2 * p, hint: 'α² + β² = (α+β)² − 2αβ',
+      steps: [...base, `$\\alpha^2+\\beta^2=(\\alpha+\\beta)^2-2\\alpha\\beta = ${par(s)}^2 - 2\\times${par(p)} = ${s * s - 2 * p}$`], traps: [[s * s - p, '2αβ를 빼야 해요. (α+β)² = α² + 2αβ + β²'], [s * s + 2 * p, '2αβ를 더하면 안 되고 빼야 해요.']] });
+  }
+  if (Math.random() < 0.5) {
+    return mk({ prompt: '두 근을 $\\alpha, \\beta$라 할 때, $\\frac{1}{\\alpha}+\\frac{1}{\\beta}$의 값은?', expr, ans: fr(s, p), hint: '1/α + 1/β = (α+β)/(αβ) 로 통분해요.',
+      steps: [...base, `$\\frac{1}{\\alpha}+\\frac{1}{\\beta}=\\frac{\\alpha+\\beta}{\\alpha\\beta}=\\frac{${s}}{${p}}${gcd(s, p) > 1 || p < 0 ? `=${fr(s, p).tex()}` : ''}$`], traps: [[fr(p, s || 1), '분자와 분모가 바뀌었어요. 통분하면 분자는 α+β예요.']] });
+  }
+  return mk({ prompt: '두 근을 $\\alpha, \\beta$라 할 때, $(\\alpha-\\beta)^2$의 값은?', expr, ans: s * s - 4 * p, hint: '(α − β)² = (α+β)² − 4αβ',
+    steps: [...base, `$(\\alpha-\\beta)^2 = (\\alpha+\\beta)^2-4\\alpha\\beta = ${s * s} - ${par(4 * p)} = ${s * s - 4 * p}$`], traps: [[s * s - 2 * p, '(α−β)²는 (α+β)²에서 4αβ를 빼요 (2αβ 아님).']] });
+});
+
+U(10, 'h1-count', '순열과 조합', 'nPr, nCr', (d) => {
+  if (d === 0) {
+    const n = R(4, 8), r = R(2, 3);
+    return mk({ prompt: `서로 다른 ${n}개에서 ${r}개를 뽑아 일렬로 나열하는 경우의 수는?`, expr: `{}_{${n}}\\mathrm{P}_{${r}}`, ans: nPr(n, r), hint: '순서가 있으면 순열: n부터 1씩 줄여가며 r개를 곱해요.',
+      steps: [`$ {}_{${n}}\\mathrm{P}_{${r}} = ${Array.from({ length: r }, (_, i) => n - i).join('\\times')} = ${nPr(n, r)}$`], traps: [[nCr(n, r), '순서를 생각하지 않은 조합으로 계산했어요. 일렬로 나열하면 순서가 중요해요!']] });
+  }
+  if (d === 1) {
+    const n = R(5, 10), r = R(2, 4);
+    return mk({ prompt: `서로 다른 ${n}개에서 순서 없이 ${r}개를 뽑는 경우의 수는?`, expr: `{}_{${n}}\\mathrm{C}_{${r}}`, ans: nCr(n, r), hint: 'nCr = nPr ÷ r!',
+      steps: [`$ {}_{${n}}\\mathrm{C}_{${r}} = \\frac{${Array.from({ length: r }, (_, i) => n - i).join('\\times')}}{${Array.from({ length: r }, (_, i) => r - i).join('\\times')}} = ${nCr(n, r)}$`], traps: [[nPr(n, r), '순서가 없는데 순열로 계산했어요. r!로 나눠야 해요.']] });
+  }
+  const n = R(4, 6);
+  return mk({ prompt: `${n}명이 일렬로 설 때, 특정한 2명이 이웃하여 서는 경우의 수는?`, ans: fact(n - 1) * 2, hint: '이웃하는 2명을 한 묶음으로 보고 나열한 뒤, 묶음 안에서 자리 바꾸기를 곱해요.',
+    steps: [`2명을 한 묶음으로 → 모두 $${n - 1}$개를 나열: $${n - 1}! = ${fact(n - 1)}$`, `묶음 안에서 두 사람이 자리를 바꾸는 경우: $2! = 2$`, `$${fact(n - 1)}\\times 2 = ${fact(n - 1) * 2}$`],
+    traps: [[fact(n - 1), '묶음 안의 2명이 자리를 바꾸는 경우(×2)를 빠뜨렸어요.'], [fact(n), '이건 모든 경우의 수예요. 이웃 조건을 반영해 묶어서 세요.']] });
+});
+
+/* ---------------------------- 고등 2학년 (수학Ⅰ·Ⅱ) ---------------------------- */
+U(11, 'h2-explog', '지수와 로그', '거듭제곱근·로그 계산', (d) => {
+  if (d === 0) {
+    const [c, k] = pick([[2, 2], [2, 3], [3, 2], [2, 4], [3, 3], [2, 5], [5, 2], [5, 3]]), base = c ** k, m = pick([1, 2, 3, 4, 5, 6].filter((x) => x !== k && x <= k + 1 && gcd(x, k) === 1));
+    return mk({ expr: `${base}^{\\frac{${m}}{${k}}}=\\square`, ans: c ** m, hint: `${base}을(를) ${c}의 거듭제곱으로 바꿔요: ${base} = ${c}^${k}`,
+      steps: [`$${base} = ${c}^{${k}}$`, `$(${c}^{${k}})^{\\frac{${m}}{${k}}} = ${c}^{${k}\\times\\frac{${m}}{${k}}} = ${c}^{${m}}$`, `$= ${c ** m}$`], traps: [[fr(base * m, k), '지수가 분수일 때 밑에 곱하면 안 돼요. 지수법칙으로 계산해요.']] });
+  }
+  if (d === 1) {
+    const c = pick([2, 3, 5]), k = R(1, 3), Y = pick([3, 5, 6, 7].filter((v) => v % c !== 0)), X = Y * c ** k;
+    return mk({ expr: `\\log_{${c}} ${X} - \\log_{${c}} ${Y}=\\square`, ans: k, hint: 'logₐM − logₐN = logₐ(M/N)',
+      steps: [`$\\log_{${c}}${X}-\\log_{${c}}${Y}=\\log_{${c}}\\frac{${X}}{${Y}}=\\log_{${c}}${X / Y}$`, `$${X / Y}=${c}^{${k}}$ 이므로 $=${k}$`], traps: [[X / Y, '로그의 값을 구해야 해요. log가 사라지지 않았어요!'], [fr(X, Y), 'M/N까지만 구했어요. 로그값은 지수예요.']] });
+  }
+  if (Math.random() < 0.5) {
+    const a = 2, k = R(2, 5), b = pick([3, 5, 7]);
+    return mk({ expr: `\\log_{${a}} ${b}\\times\\log_{${b}} ${a ** k}=\\square`, ans: k, hint: '밑변환 공식: logₐb × log_b c = logₐc',
+      steps: [`$\\log_{${a}}${b}\\times\\log_{${b}}${a ** k}=\\frac{\\log ${b}}{\\log ${a}}\\times\\frac{\\log ${a ** k}}{\\log ${b}}$`, `$=\\frac{\\log ${a ** k}}{\\log ${a}}=\\log_{${a}}${a ** k}=${k}$`], traps: [[a ** k, '로그값은 지수예요.']] });
+  }
+  const c = pick([2, 3]), m = R(2, 3), n = R(1, 5);
+  return mk({ expr: `\\log_{${c ** m}} ${c ** n}=\\square`, ans: fr(n, m), hint: 'log_{aᵐ} aⁿ = n/m', steps: [`$\\log_{${c}^{${m}}}${c}^{${n}}=\\frac{${n}}{${m}}\\log_{${c}}${c}=${fr(n, m).tex()}$`], traps: [[fr(m, n), '분자와 분모가 바뀌었어요. 진수의 지수가 분자!']] });
+});
+
+const TRIG = [
+  // [함수, 분자, 분모(π 배수), 값, 설명]
+  ['sin', 1, 6, '1/2', 1, '제1사분면, 기준각 $\\frac{\\pi}{6}$ 그대로'], ['cos', 1, 3, '1/2', 1, '제1사분면, $\\cos\\frac{\\pi}{3}=\\frac12$'], ['tan', 1, 4, '1', 1, '제1사분면, $\\tan\\frac{\\pi}{4}=1$'],
+  ['sin', 1, 2, '1', 1, '$\\frac{\\pi}{2}$에서 단위원 위의 점 $(0,1)$ → $\\sin=1$'], ['cos', 0, 1, '1', 1, '각 0에서 점 $(1,0)$ → $\\cos=1$'], ['cos', 1, 2, '0', 1, '$\\frac{\\pi}{2}$에서 점 $(0,1)$ → $\\cos=0$'],
+  ['sin', 5, 6, '1/2', 2, '$\\pi-\\frac{\\pi}{6}$ (제2사분면), sin은 양수 → $\\sin\\frac{\\pi}{6}=\\frac12$'], ['cos', 2, 3, '-1/2', 2, '$\\pi-\\frac{\\pi}{3}$ (제2사분면), cos은 음수 → $-\\frac12$'],
+  ['tan', 3, 4, '-1', 2, '$\\pi-\\frac{\\pi}{4}$ (제2사분면), tan은 음수 → $-1$'], ['sin', 7, 6, '-1/2', 3, '$\\pi+\\frac{\\pi}{6}$ (제3사분면), sin은 음수 → $-\\frac12$'],
+  ['cos', 4, 3, '-1/2', 3, '$\\pi+\\frac{\\pi}{3}$ (제3사분면), cos은 음수 → $-\\frac12$'], ['tan', 5, 4, '1', 3, '$\\pi+\\frac{\\pi}{4}$ (제3사분면), tan은 양수 → $1$'],
+  ['sin', 11, 6, '-1/2', 4, '$2\\pi-\\frac{\\pi}{6}$ (제4사분면), sin은 음수 → $-\\frac12$'], ['cos', 5, 3, '1/2', 4, '$2\\pi-\\frac{\\pi}{3}$ (제4사분면), cos은 양수 → $\\frac12$'],
+  ['tan', 7, 4, '-1', 4, '$2\\pi-\\frac{\\pi}{4}$ (제4사분면), tan은 음수 → $-1$'], ['cos', 1, 1, '-1', 2, '$\\pi$에서 점 $(-1,0)$ → $\\cos\\pi=-1$'], ['sin', 3, 2, '-1', 3, '$\\frac{3\\pi}{2}$에서 점 $(0,-1)$ → $\\sin=-1$'],
+];
+const angTex = (n, dd) => (n === 0 ? '0' : dd === 1 ? (n === 1 ? '\\pi' : `${n}\\pi`) : `\\frac{${n === 1 ? '' : n}\\pi}{${dd}}`);
+const trigTex = (t) => `\\${t[0]}${t[2] === 1 || t[1] === 0 ? ' ' : ''}${angTex(t[1], t[2])}`;
+U(11, 'h2-trig', '삼각함수의 값', '특수각·사분면 부호', (d) => {
+  if (d < 2) {
+    const pool = TRIG.filter((t) => (d === 0 ? t[4] === 1 : t[4] !== 1)), t = pick(pool), v = t[3];
+    const neg = v.startsWith('-') ? v.slice(1) : '-' + v;
+    return mk({ expr: `${trigTex(t)}=\\square`, ans: v, hint: d === 0 ? '특수각 삼각비 표를 떠올려요: sin π/6 = 1/2, cos π/3 = 1/2, tan π/4 = 1' : '기준각의 값을 구한 뒤, 사분면에 따라 부호를 정해요. (얼싸안코: 1사분면 모두+, 2 sin+, 3 tan+, 4 cos+)',
+      steps: [t[5], `답: $${fr(...v.split('/').map(Number)).tex()}$`], traps: v !== '0' ? [[neg, '크기는 맞았지만 부호가 틀렸어요. 각이 몇 사분면에 있는지 확인해요!']] : [] });
+  }
+  const t1 = pick(TRIG), t2 = pick(TRIG), k = R(2, 3);
+  const v1 = fr(...t1[3].split('/').map(Number)), v2 = fr(...t2[3].split('/').map(Number)), ans = v1.mul(k).add(v2);
+  return mk({ expr: `${k}${trigTex(t1)} + ${trigTex(t2)}=\\square`, ans, hint: '각각의 값을 먼저 구한 다음 계산해요.',
+    steps: [`${t1[5]} → $${trigTex(t1)}=${v1.tex()}$`, `${t2[5]} → $${trigTex(t2)}=${v2.tex()}$`, `$${k}\\times${v1.n < 0 ? `(${v1.tex()})` : v1.tex()} + ${v2.n < 0 ? `(${v2.tex()})` : v2.tex()} = ${ans.tex()}$`], traps: [[v1.add(v2), `앞의 계수 ${k}를 곱하는 걸 잊었어요.`]] });
+});
+
+U(11, 'h2-seq', '수열', '등차·등비·Σ', (d) => {
+  if (d === 0) {
+    const a = R(-10, 10), dd = nz(-5, 6), n = R(6, 20);
+    return mk({ prompt: `첫째항이 $${a}$, 공차가 $${dd}$인 등차수열의 제${n}항은?`, ans: a + (n - 1) * dd, hint: 'aₙ = a + (n − 1)d', steps: [`$a_{${n}} = ${a} + (${n}-1)\\times${par(dd)}$`, `$= ${a} ${sgnNum((n - 1) * dd)} = ${a + (n - 1) * dd}$`],
+      traps: [[a + n * dd, '공차는 (n − 1)번 더해져요. n번이 아니에요!']] });
+  }
+  if (d === 1) {
+    if (Math.random() < 0.5) {
+      const a = nz(-3, 3), r = pick([2, 3, -2]), n = R(3, 6);
+      return mk({ prompt: `첫째항이 $${a}$, 공비가 $${r}$인 등비수열의 제${n}항은?`, ans: a * r ** (n - 1), hint: 'aₙ = a·rⁿ⁻¹', steps: [`$a_{${n}} = ${a}\\times${par(r)}^{${n - 1}}$`, `$= ${a}\\times${r ** (n - 1)} = ${a * r ** (n - 1)}$`],
+        traps: [[a * r ** n, '공비는 (n − 1)번 곱해져요.']] });
+    }
+    const a = R(-5, 10), dd = nz(-3, 5), n = R(5, 15), S = (n * (2 * a + (n - 1) * dd)) / 2;
+    return mk({ prompt: `첫째항이 $${a}$, 공차가 $${dd}$인 등차수열의 첫째항부터 제${n}항까지의 합은?`, ans: S, hint: 'Sₙ = n{2a + (n − 1)d} / 2',
+      steps: [`$S_{${n}}=\\frac{${n}\\{2\\times${par(a)}+(${n}-1)\\times${par(dd)}\\}}{2}$`, `$=\\frac{${n}\\times${par(2 * a + (n - 1) * dd)}}{2}=${S}$`], traps: [[n * (2 * a + (n - 1) * dd), '마지막에 2로 나누는 걸 잊었어요.']] });
+  }
+  const p = nz(-3, 4), q = R(-5, 5), n = R(5, 12), ans = (p * n * (n + 1)) / 2 + q * n;
+  return mk({ expr: `\\sum_{k=1}^{${n}} (${poly([p, q], 'k')})=\\square`, ans, hint: 'Σ(pk + q) = pΣk + Σq,  Σk = n(n+1)/2,  Σq = qn',
+    steps: [`$\\sum(${poly([p, q], 'k')}) = ${p}\\sum k ${q ? sgnNum(q) : ''}${q ? '\\sum 1' : ''}$`, `$\\sum_{k=1}^{${n}}k=\\frac{${n}\\times${n + 1}}{2}=${(n * (n + 1)) / 2}$`, `$${p}\\times${(n * (n + 1)) / 2}${q ? ` ${sgnNum(q)}\\times${n}` : ''} = ${ans}$`],
+    traps: q ? [[(p * n * (n + 1)) / 2 + q, `상수 ${q}도 ${n}번 더해져요. Σq = ${q}×${n}!`]] : [] });
+});
+
+U(11, 'h2-lim', '함수의 극한', '0/0꼴·∞/∞꼴', (d) => {
+  if (d === 0) {
+    const a = nz(-4, 4), p = nz(-6, 6), q = R(-9, 9);
+    return mk({ expr: `\\lim_{x\\to ${a}} (${poly([1, p, q])})=\\square`, ans: a * a + p * a + q, hint: '다항함수의 극한은 그 값을 그대로 대입하면 돼요.', steps: [`$x=${a}$ 대입: $(${a})^2 ${sgnNum(p)}\\times${par(a)} ${sgnNum(q)} = ${a * a + p * a + q}$`], traps: [] });
+  }
+  if (d === 1) {
+    const r = nz(-5, 5), s = R(-6, 6);
+    return mk({ expr: `\\lim_{x\\to ${r}} \\frac{${poly([1, -(r + s), r * s])}}{${poly([1, -r])}}=\\square`, ans: r - s, hint: '대입하면 0/0 꼴! 분자를 인수분해해서 약분해요.',
+      steps: [`$x=${r}$ 대입 시 $\\frac{0}{0}$ 꼴`, `분자 인수분해: $(${poly([1, -r])})(${poly([1, -s])})$`, `약분: $\\lim_{x\\to ${r}}(${poly([1, -s])}) = ${r} ${sgnNum(-s)} = ${r - s}$`],
+      traps: [[0, '0/0 꼴은 0이 아니에요! 약분한 뒤에 대입해요.'], [r + s, '인수분해 후 남은 식에 대입할 때 부호를 확인해요.']] });
+  }
+  const a = nz(-6, 6), b = R(-9, 9), c = R(-9, 9), dd = nz(-4, 5), e = nz(-9, 9);
+  return mk({ expr: `\\lim_{x\\to \\infty} \\frac{${poly([a, b, c])}}{${poly([dd, 0, e])}}=\\square`, ans: fr(a, dd), hint: '∞/∞ 꼴: 분모의 최고차항 x²으로 분모·분자를 나눠요 → 최고차항 계수의 비',
+    steps: [`분모·분자를 $x^2$으로 나눠요.`, `$\\frac{${a} + \\frac{${b}}{x} + \\frac{${c}}{x^2}}{${dd} + \\frac{${e}}{x^2}}$`, `$x\\to\\infty$ 이면 $\\frac{k}{x}\\to0$ → $${fr(a, dd).tex()}$`],
+    traps: c && e ? [[fr(c, e), '상수항끼리의 비가 아니라 최고차항 계수의 비예요.']] : [] });
+});
+
+U(11, 'h2-deriv', '미분계수와 도함수', "f'(a), 접선", (d) => {
+  if (d === 0) {
+    const a = nz(-5, 5), b = R(-9, 9), c = R(-9, 9), k = nz(-4, 4);
+    return mk({ prompt: `$f(x)=${poly([a, b, c])}$ 일 때, $f'(${k})$의 값은?`, ans: 2 * a * k + b, hint: '(xⁿ)′ = n·xⁿ⁻¹, 상수의 미분은 0',
+      steps: [`$f'(x) = ${poly([2 * a, b])}$`, `$f'(${k}) = ${2 * a}\\times${par(k)} ${sgnNum(b)} = ${2 * a * k + b}$`], traps: [[a * k * k + b * k + c, "f(k)를 계산했어요. 미분한 뒤 대입해야 f'(k)예요!"], [a * k + b, '지수 2를 앞으로 내려 곱하는 걸 잊었어요.']] });
+  }
+  if (d === 1) {
+    const a = nz(-3, 3), b = R(-5, 5), c = R(-9, 9), e = R(-9, 9), k = nz(-3, 3), ans = 3 * a * k * k + 2 * b * k + c;
+    return mk({ prompt: `$f(x)=${poly([a, b, c, e])}$ 일 때, $f'(${k})$의 값은?`, ans, hint: '각 항을 따로 미분해요.',
+      steps: [`$f'(x) = ${poly([3 * a, 2 * b, c])}$`, `$f'(${k}) = ${3 * a}\\times${k * k} ${sgnNum(2 * b * k)} ${sgnNum(c)} = ${ans}$`], traps: [[a * k ** 3 + b * k * k + c * k + e, "미분하지 않고 f(k)를 구했어요."]] });
+  }
+  const b = R(-6, 6), c = R(-9, 9), k = nz(-3, 3), m = 2 * k + b, fk = k * k + b * k + c, n = fk - m * k;
+  return mk({ prompt: `곡선 $y=${poly([1, b, c])}$ 위의 점 $(${k}, ${fk})$에서의 접선을 $y=mx+n$이라 할 때, $n$의 값은?`, ans: n, hint: "접선의 기울기 m = f'(k), 그리고 점 (k, f(k))를 지나요.",
+    steps: [`$f'(x)=${poly([2, b])}$ → $m=f'(${k})=${m}$`, `$y - ${par(fk)} = ${m}(x - ${par(k)})$`, `$y = ${poly([m, n])}$ → $n = ${n}$`], traps: [[fk, 'f(k)는 접점의 y좌표예요. 접선의 y절편은 f(k) − mk 예요.'], [m, '이건 기울기 m이에요.']] });
+});
+
+U(11, 'h2-int', '정적분', '부정적분·정적분 계산', (d) => {
+  if (d === 0) {
+    const p = nz(-4, 6), q = R(-6, 6), a = R(-2, 1), b = a + R(1, 3);
+    const Fx = (x) => fr(p * x * x, 2).add(q * x), ans = Fx(b).sub(Fx(a));
+    return mk({ expr: `\\int_{${a}}^{${b}} (${poly([p, q])})\\,dx=\\square`, ans, hint: '∫xⁿ dx = xⁿ⁺¹/(n+1). 위끝 대입값 − 아래끝 대입값',
+      steps: [`부정적분: $F(x) = ${poly([fr(p, 2), q, 0])}$`, `$F(${b}) = ${Fx(b).tex()}$, $F(${a}) = ${Fx(a).tex()}$`, `$F(${b}) - F(${a}) = ${ans.tex()}$`],
+      traps: [[fr(p * (b * b - a * a), 1).add(q * (b - a)), 'x를 적분할 때 x²/2 로 2를 나누는 걸 잊었어요.'], ...(a !== 0 ? [[Fx(b), '아래끝 값 F(' + a + ')를 빼는 걸 잊었어요.']] : [])] });
+  }
+  if (d === 1) {
+    const p = nz(-3, 3), q = R(-4, 4), r = R(-5, 5), a = R(-1, 1), b = a + R(1, 3);
+    const Fx = (x) => fr(p * x ** 3, 3).add(fr(q * x * x, 2)).add(r * x), ans = Fx(b).sub(Fx(a));
+    return mk({ expr: `\\int_{${a}}^{${b}} (${poly([p, q, r])})\\,dx=\\square`, ans, hint: '각 항을 따로 적분해요: x² → x³/3, x → x²/2',
+      steps: [`$F(x) = ${poly([fr(p, 3), fr(q, 2), r, 0])}$`, `$F(${b}) = ${Fx(b).tex()}$`, `$F(${a}) = ${Fx(a).tex()}$`, `$F(${b})-F(${a}) = ${ans.tex()}$`],
+      traps: a !== 0 ? [[Fx(b), `아래끝 F(${a})를 빼는 걸 잊었어요.`]] : [[fr(p * b ** 3).add(q * b * b).add(r * b), '적분할 때 차수+1로 나누는 걸 잊었어요.']] });
+  }
+  const p = nz(-3, 3), q = nz(-3, 3), r = nz(-5, 5), s = R(-4, 4), a = R(1, 3);
+  const half = fr(q * a ** 3, 3).add(s * a), ans = half.mul(2);
+  return mk({ expr: `\\int_{-${a}}^{${a}} (${poly([p, q, r, s])})\\,dx=\\square`, ans, hint: '구간이 [−a, a]이면 홀수차항은 0, 짝수차항은 2∫₀ᵃ 로 계산해요.',
+    steps: [`홀수차항 $${poly([p, 0, r, 0])}$ 의 적분은 $0$ (원점대칭)`, `짝수차항만 남아요: $2\\int_{0}^{${a}}(${poly([q, 0, s])})dx$`, `$=2\\left[${poly([fr(q, 3), 0, s, 0])}\\right]_0^{${a}} = 2\\times${half.n < 0 ? `\\left(${half.tex()}\\right)` : half.tex()} = ${ans.tex()}$`],
+    traps: [[half, '짝수차항은 0~a 적분의 2배예요. 2를 곱하는 걸 잊었어요.']] });
+});
+
+/* ---------------------------- 고등 3학년 (미적분·확률과 통계) ---------------------------- */
+U(12, 'h3-series', '수열의 극한과 급수', '등비급수·부분분수', (d) => {
+  if (d === 0) {
+    const a = nz(-6, 6), b = R(-9, 9), c = nz(-4, 5), e = R(-9, 9);
+    return mk({ expr: `\\lim_{n\\to\\infty}\\frac{${poly([a, b], 'n')}}{${poly([c, e], 'n')}}=\\square`, ans: fr(a, c), hint: '분모의 최고차항 n으로 분모·분자를 나눠요.',
+      steps: [`분모·분자를 $n$으로 나누면 $\\frac{${a} + \\frac{${b}}{n}}{${c} + \\frac{${e}}{n}}$`, `$n\\to\\infty$ → $${fr(a, c).tex()}$`], traps: b && e ? [[fr(b, e), '상수항의 비가 아니라 최고차항 계수의 비예요.']] : [] });
+  }
+  if (d === 1) {
+    const [rn, rd] = pick([[1, 2], [1, 3], [2, 3], [-1, 2], [1, 4], [3, 4], [-1, 3]]), a = nz(-6, 6), r = fr(rn, rd), ans = fr(a).div(fr(1).sub(r));
+    return mk({ expr: `\\sum_{n=1}^{\\infty} ${a === 1 ? '' : a === -1 ? '-' : a}\\left(${r.tex()}\\right)^{n-1}=\\square`, ans, hint: '|r| < 1 인 등비급수의 합 = (첫째항) / (1 − 공비)',
+      steps: [`첫째항 $${a}$, 공비 $${r.tex()}$ ($|r|<1$ 이므로 수렴)`, `$\\frac{${a}}{1-${rn < 0 ? `(${r.tex()})` : r.tex()}} = \\frac{${a}}{${fr(1).sub(r).tex()}} = ${ans.tex()}$`],
+      traps: [[fr(a).div(fr(1).add(r)), '분모는 1 − r 이에요. 부호를 확인해요.'], [fr(a).mul(r).div(fr(1).sub(r)), '첫째항은 n=1일 때의 값 ' + a + '이에요.']] });
+  }
+  const n = R(5, 20);
+  if (Math.random() < 0.5) {
+    return mk({ expr: `\\sum_{k=1}^{${n}}\\frac{1}{k(k+1)}=\\square`, ans: fr(n, n + 1), hint: '부분분수로: 1/{k(k+1)} = 1/k − 1/(k+1). 앞뒤가 지워져요.',
+      steps: [`$\\frac{1}{k(k+1)}=\\frac{1}{k}-\\frac{1}{k+1}$`, `$\\left(1-\\frac12\\right)+\\left(\\frac12-\\frac13\\right)+\\cdots+\\left(\\frac{1}{${n}}-\\frac{1}{${n + 1}}\\right)$`, `$=1-\\frac{1}{${n + 1}}=${fr(n, n + 1).tex()}$`], traps: [[fr(n - 1, n), '마지막 항은 1/(n+1)이에요. 끝까지 확인해요.']] });
+  }
+  return mk({ expr: `\\sum_{k=1}^{${n}}\\frac{1}{(2k-1)(2k+1)}=\\square`, ans: fr(n, 2 * n + 1), hint: '1/{(2k−1)(2k+1)} = ½ {1/(2k−1) − 1/(2k+1)}',
+    steps: [`$\\frac{1}{(2k-1)(2k+1)}=\\frac12\\left(\\frac{1}{2k-1}-\\frac{1}{2k+1}\\right)$`, `앞뒤가 지워지고 $\\frac12\\left(1-\\frac{1}{${2 * n + 1}}\\right)$`, `$=\\frac12\\times\\frac{${2 * n}}{${2 * n + 1}}=${fr(n, 2 * n + 1).tex()}$`], traps: [[fr(2 * n, 2 * n + 1), '부분분수로 나눌 때 앞의 ½을 곱하는 걸 잊었어요.']] });
+});
+
+U(12, 'h3-diff', '여러 가지 미분법', '합성·곱·몫의 미분', (d) => {
+  if (d === 0) {
+    const a = R(2, 4), b = pick([1, 2, -1]), n = R(2, 4), ans = n * a * b ** (n - 1);
+    return mk({ prompt: `$f(x)=(${poly([a, b])})^{${n}}$ 일 때, $f'(0)$의 값은?`, ans, hint: "합성함수의 미분: {g(x)ⁿ}′ = n·g(x)ⁿ⁻¹·g′(x). 속미분을 꼭 곱해요!",
+      steps: [`$f'(x) = ${n}(${poly([a, b])})^{${n - 1}}\\times ${a}$`, `$f'(0) = ${n}\\times${par(b)}^{${n - 1}}\\times${a} = ${ans}$`], traps: [[n * b ** (n - 1), `속미분 (${a}x${b >= 0 ? '+' : ''}${b})′ = ${a} 를 곱하는 걸 잊었어요.`]] });
+  }
+  if (d === 1) {
+    if (Math.random() < 0.5) {
+      const a = nz(-3, 3), b = nz(-4, 4), c = R(-5, 5);
+      return mk({ prompt: `$f(x)=e^{${a === 1 ? '' : a === -1 ? '-' : a}x}(${poly([b, c])})$ 일 때, $f'(0)$의 값은?`, ans: a * c + b, hint: "곱의 미분: (fg)′ = f′g + fg′",
+        steps: [`$f'(x) = ${a}e^{${a}x}(${poly([b, c])}) + e^{${a}x}\\times${par(b)}$`, `$f'(0) = ${a}\\times1\\times${par(c)} + 1\\times${par(b)} = ${a * c + b}$`], traps: [[b, '곱의 미분에서 앞 함수 e^{ax}의 미분 항을 빠뜨렸어요.'], [a * b, '곱의 미분은 각각 미분해서 곱하는 게 아니에요: f′g + fg′']] });
+    }
+    const a = R(1, 5), b = R(1, 6);
+    return mk({ prompt: `$f(x)=\\ln(${poly([a, b])})$ 일 때, $f'(0)$의 값은?`, ans: fr(a, b), hint: "{ln g(x)}′ = g′(x) / g(x)", steps: [`$f'(x)=\\frac{${a}}{${poly([a, b])}}$`, `$f'(0)=${fr(a, b).tex()}$`], traps: [[fr(1, b), '속미분 g′(x) = ' + a + '를 곱하는 걸 잊었어요.']] });
+  }
+  const a = nz(-4, 4), b = nz(-4, 4), c = nz(-3, 3), e = nz(-3, 3), ans = fr(a * e - b * c, e * e);
+  return mk({ prompt: `$f(x)=\\frac{${poly([a, b])}}{${poly([c, e])}}$ 일 때, $f'(0)$의 값은?`, ans, hint: "몫의 미분: (f/g)′ = (f′g − fg′) / g²",
+    steps: [`$f'(x)=\\frac{${a}(${poly([c, e])}) - (${poly([a, b])})\\times${par(c)}}{(${poly([c, e])})^2}$`, `$f'(0)=\\frac{${a}\\times${par(e)} - ${par(b)}\\times${par(c)}}{${e * e}} = ${ans.tex()}$`],
+    traps: [[fr(b * c - a * e, e * e), '분자의 순서가 바뀌었어요: f′g − fg′ (위를 미분한 게 먼저)'], [fr(a * e - b * c, e), '분모 g(x)를 제곱하는 걸 잊었어요.']] });
+});
+
+U(12, 'h3-prob', '확률', '경우의 수·조건부확률·독립시행', (d) => {
+  if (d === 0) {
+    const s = R(3, 11), cnt = 6 - Math.abs(s - 7);
+    return mk({ prompt: `주사위 두 개를 동시에 던질 때, 나온 눈의 합이 ${s}일 확률은?`, ans: fr(cnt, 36), hint: '전체 경우의 수는 6 × 6 = 36. 합이 되는 순서쌍을 모두 세어요.',
+      steps: [`합이 ${s}인 순서쌍: ${Array.from({ length: 6 }, (_, i) => i + 1).filter((x) => s - x >= 1 && s - x <= 6).map((x) => `(${x},${s - x})`).join(', ')} → ${cnt}가지`, `$\\frac{${cnt}}{36}${gcd(cnt, 36) > 1 ? `=${fr(cnt, 36).tex()}` : ''}$`],
+      traps: [[fr(cnt, 6), '전체 경우의 수는 6이 아니라 6 × 6 = 36이에요.'], [fr(1, 11), '합이 나오는 경우(2~12)가 모두 같은 확률은 아니에요!'], [fr(Math.ceil(cnt / 2), 36), '(1,2)와 (2,1)은 서로 다른 경우예요. 순서쌍으로 세요.']] });
+  }
+  if (d === 1) {
+    const D = pick([10, 12, 20]), pa = R(3, D - 3), pab = R(1, pa - 1), pb = R(pab + 1, D - pa + pab);
+    return mk({ prompt: `$P(A)=${ftex(pa, D)}$, $P(B)=${ftex(pb, D)}$, $P(A\\cap B)=${ftex(pab, D)}$ 일 때, $P(B\\,|\\,A)$는?`, ans: fr(pab, pa), hint: 'P(B|A) = P(A∩B) / P(A) — 조건(A)이 분모!',
+      steps: [`$P(B|A)=\\frac{P(A\\cap B)}{P(A)}$`, `$=\\frac{${pab}/${D}}{${pa}/${D}}=\\frac{${pab}}{${pa}}${gcd(pab, pa) > 1 ? `=${fr(pab, pa).tex()}` : ''}$`], traps: [[fr(pab, pb), 'P(A|B)를 구했어요. 조건 A의 확률이 분모예요.'], [fr(pab, D), '조건부확률은 P(A∩B)를 P(A)로 나눠야 해요.']] });
+  }
+  const n = R(3, 5), k = R(1, n - 1), ans = fr(nCr(n, k), 2 ** n);
+  return mk({ prompt: `동전 한 개를 ${n}번 던질 때, 앞면이 정확히 ${k}번 나올 확률은?`, ans, hint: '독립시행: ₙCₖ pᵏ (1 − p)ⁿ⁻ᵏ',
+    steps: [`$ {}_{${n}}\\mathrm{C}_{${k}}\\left(\\frac12\\right)^{${k}}\\left(\\frac12\\right)^{${n - k}}$`, `$= ${nCr(n, k)}\\times\\frac{1}{${2 ** n}} = ${ans.tex()}$`], traps: [[fr(1, 2 ** n), `앞면이 나오는 ${k}번의 위치를 고르는 경우의 수 ₙCₖ = ${nCr(n, k)}를 곱해야 해요.`]] });
+});
+
+U(12, 'h3-stat', '중복순열·중복조합·확률분포', 'nΠr, nHr, 이항분포', (d) => {
+  if (d === 0) {
+    const n = R(2, 5), r = R(2, 4);
+    return mk({ prompt: `숫자 1부터 ${n}까지 중복을 허용하여 ${r}자리 자연수를 만드는 경우의 수는?`, expr: `{}_{${n}}\\Pi_{${r}}`, ans: n ** r, hint: '중복순열: 각 자리마다 n가지 → nʳ',
+      steps: [`각 자리에 올 수 있는 수: ${n}가지`, `$${Array(r).fill(n).join('\\times')} = ${n ** r}$`], traps: r <= n ? [[nPr(n, r), '중복을 허용하므로 매번 n가지예요. 순열처럼 줄어들지 않아요.']] : [[r ** n, 'n과 r의 위치가 바뀌었어요: nΠr = nʳ']] });
+  }
+  if (d === 1) {
+    const n = R(2, 4), r = R(3, 6), ans = nCr(n + r - 1, r);
+    return mk({ prompt: `서로 다른 ${n}종류의 사탕 중에서 중복을 허용하여 ${r}개를 고르는 경우의 수는?`, expr: `{}_{${n}}\\mathrm{H}_{${r}}`, ans, hint: 'nHr = ₙ₊ᵣ₋₁Cᵣ',
+      steps: [`$ {}_{${n}}\\mathrm{H}_{${r}} = {}_{${n + r - 1}}\\mathrm{C}_{${r}}$`, `$= ${ans}$`], traps: [[n ** r, '순서가 없으니 중복순열이 아니라 중복조합이에요.'], [nCr(n + r, r), 'nHr = (n+r−1)Cr 이에요. −1을 빠뜨렸어요.']] });
+  }
+  const [pn, pd] = pick([[1, 2], [1, 3], [1, 4], [1, 5], [2, 3], [3, 4]]), n = pd * R(2, 12), p = fr(pn, pd), E = p.mul(n), V = E.mul(fr(1).sub(p)), w = R(0, 2), a = R(2, 3), b = R(1, 5);
+  if (w === 0) return mk({ prompt: `확률변수 $X$가 이항분포 $B\\left(${n}, ${p.tex()}\\right)$를 따를 때, $V(X)$는?`, ans: V, hint: 'B(n, p)에서 E(X) = np, V(X) = np(1 − p)',
+    steps: [`$V(X)=np(1-p)=${n}\\times${p.tex()}\\times${fr(1).sub(p).tex()}=${V.tex()}$`], traps: [[E, 'E(X) = np 를 구했어요. 분산은 (1 − p)를 더 곱해요.']] });
+  if (w === 1) return mk({ prompt: `확률변수 $X$가 이항분포 $B\\left(${n}, ${p.tex()}\\right)$를 따를 때, $E(${a}X+${b})$는?`, ans: E.mul(a).add(b), hint: 'E(aX + b) = aE(X) + b',
+    steps: [`$E(X)=np=${E.tex()}$`, `$E(${a}X+${b})=${a}\\times${E.tex()}+${b}=${E.mul(a).add(b).tex()}$`], traps: [[E.mul(a), '+b 를 더하는 걸 잊었어요.']] });
+  return mk({ prompt: `확률변수 $X$가 이항분포 $B\\left(${n}, ${p.tex()}\\right)$를 따를 때, $V(${a}X+${b})$는?`, ans: V.mul(a * a), hint: 'V(aX + b) = a²V(X). 상수 b는 분산에 영향이 없어요.',
+    steps: [`$V(X)=np(1-p)=${V.tex()}$`, `$V(${a}X+${b})=${a}^2\\times${V.tex()}=${V.mul(a * a).tex()}$`], traps: [[V.mul(a), '분산은 a가 아니라 a²배예요.'], [V.mul(a * a).add(b), '분산에서 상수 b는 더하지 않아요.'], [V.mul(a).add(b), 'V(aX+b) = a²V(X) 예요.']] });
+});
+</script>
+<script>
+'use strict';
+/* =====================================================================
+ * 3. 채점 엔진 + 과정 중심 오답 진단
+ * ===================================================================== */
+function normalizeInput(s) {
+  return String(s || '')
+    .replace(/[−–—]/g, '-').replace(/[，、]/g, ',').replace(/÷/g, '/').replace(/[()]/g, '')
+    .replace(/\s+/g, '').replace(/^[a-zA-Z]=/, '').replace(/,[a-zA-Z]=/g, ',');
+}
+function parseNum(t) {
+  if (/^[-+]?(\d+\.?\d*|\.\d+)$/.test(t)) return Number(t);
+  const m = t.match(/^([-+]?)(\d+(?:\.\d+)?)\/([-+]?\d+(?:\.\d+)?)$/);
+  if (m) { const d = Number(m[3]); if (d === 0) return NaN; return (m[1] === '-' ? -1 : 1) * Number(m[2]) / d; }
+  return NaN;
+}
+function parseAnswer(s) {
+  const t = normalizeInput(s); if (!t) return null;
+  const parts = t.split(','); if (parts.some((p) => p === '')) return null;
+  const vals = parts.map(parseNum); return vals.some((v) => Number.isNaN(v)) ? null : vals;
+}
+function eqVals(a, b, type) {
+  if (!a || !b || a.length !== b.length) return false;
+  if (type === 'set') { a = [...a].sort((x, y) => x - y); b = [...b].sort((x, y) => x - y); }
+  return a.every((x, i) => Math.abs(x - b[i]) < 1e-9);
+}
+function genericDiagnosis(u, c, type) {
+  if (u.length !== c.length) return `답이 ${c.length}개 필요해요. 쉼표( , )로 구분해서 모두 써 주세요.`;
+  if (u.length > 1) {
+    if (type === 'pair' && eqVals(u, c, 'set')) return '값은 맞았는데 순서가 바뀌었어요. 문제에서 말한 순서대로 써 주세요.';
+    const ok = u.filter((x, i) => Math.abs(x - c[i]) < 1e-9).length;
+    if (ok > 0 && type !== 'set') return `${ok}개는 맞았어요! 나머지 값을 구하는 과정을 다시 살펴봐요.`;
+    if (u.every((x, i) => Math.abs(x + c[i]) < 1e-9) || eqVals(u.map((x) => -x), c, type)) return '크기는 맞았는데 부호(+/−)가 모두 반대예요. 부호를 결정하는 단계를 다시 확인해요.';
+    return '처음부터 차근차근 다시 살펴봐요. 아래 힌트와 풀이를 따라가 보세요.';
+  }
+  const x = u[0], y = c[0];
+  if (y !== 0 && Math.abs(x + y) < 1e-9) return '크기는 맞았는데 부호(+/−)가 반대예요. 부호 규칙을 다시 확인해요!';
+  if (y !== 0 && x !== 0) {
+    const r = x / y;
+    if ([10, 100, 1000, 0.1, 0.01, 0.001].some((k) => Math.abs(r - k) < 1e-9)) return '숫자는 맞았는데 자릿값(소수점 위치)이 달라요. 소수점 아래 자릿수를 세어 봐요.';
+    if (Math.abs(x * y - 1) < 1e-9) return '역수(분자와 분모를 뒤집은 값)가 나왔어요. 어느 단계에서 뒤집었는지 확인해요.';
+  }
+  if (Number.isInteger(x) && Number.isInteger(y) && Math.abs(x - y) <= 2) return '거의 다 왔어요! 마지막 계산에서 작은 실수가 있었어요. 한 단계씩 검산해 봐요.';
+  return '처음부터 차근차근 다시 살펴봐요. 아래 힌트와 풀이를 따라가 보세요.';
+}
+/** @returns {{status:'correct'|'wrong'|'invalid', msg?:string, trap?:boolean, note?:string}} */
+function gradeAnswer(prob, input) {
+  const u = parseAnswer(input); if (!u) return { status: 'invalid' };
+  const c = parseAnswer(prob.ans);
+  if (eqVals(u, c, prob.type)) {
+    let note = '';
+    const fr = normalizeInput(input).split(',').find((p) => /\//.test(p));
+    if (fr) { const [a, b] = fr.replace('-', '').split('/').map(Number); if (Number.isInteger(a) && Number.isInteger(b) && gcd(a, b) > 1) note = '정답! 다만 분수는 기약분수로 약분해서 쓰는 습관을 들이면 더 좋아요.'; }
+    return { status: 'correct', note };
+  }
+  for (const [tv, msg] of prob.traps || []) {
+    const tvals = parseAnswer(tv);
+    if (tvals && !eqVals(tvals, c, prob.type) && eqVals(u, tvals, prob.type)) return { status: 'wrong', msg, trap: true };
+  }
+  return { status: 'wrong', msg: genericDiagnosis(u, c, prob.type), trap: false };
+}
+function ansTex(prob) {
+  const parts = String(prob.ans).split(',').map((p) => { const m = p.match(/^(-?)(\d+)\/(\d+)$/); return m ? `${m[1]}\\frac{${m[2]}}{${m[3]}}` : p; });
+  if (prob.type === 'pair' && parts.length > 1) return `(${parts.join(',\\ ')})`;
+  return parts.join(',\\ ');
+}
+
+/* =====================================================================
+ * 4. 저장소 (StorageAdapter): LocalStore + SupabaseStore → DB(하이브리드)
+ * ---------------------------------------------------------------------
+ * [Supabase 연동 방법]
+ * 1) supabase.com 무료 프로젝트 생성 → SQL Editor 에서 아래 실행
+ *
+ *    create table if not exists public.sm_profiles (
+ *      id text primary key,             -- 학생 ID (?user= 파라미터 값)
+ *      name text not null,
+ *      data jsonb not null,             -- 학습 기록 전체 (JSON)
+ *      updated_at timestamptz not null default now()
+ *    );
+ *    alter table public.sm_profiles enable row level security;
+ *    -- 데모/가정·교실용 간단 정책 (anon 키로 읽기/쓰기 허용).
+ *    -- 실제 서비스에서는 Supabase Auth 로 로그인 후 auth.uid() 기반 정책으로 바꾸세요.
+ *    create policy "sm demo rw" on public.sm_profiles for all to anon using (true) with check (true);
+ *
+ * 2) 앱의 [설정 → 클라우드 동기화] 에 Project URL 과 anon public key 입력
+ * 3) 이후 같은 ?user= 링크로 어느 기기에서 접속해도 같은 기록이 이어집니다.
+ * ===================================================================== */
+const LS = {
+  get(k, d = null) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } },
+  del(k) { try { localStorage.removeItem(k); } catch { /* ignore */ } },
+};
+const LocalStore = {
+  list() { return LS.get('sm:users', []); },
+  load(id) { return LS.get('sm:u:' + id); },
+  save(data) {
+    LS.set('sm:u:' + data.id, data);
+    const list = this.list().filter((x) => x.id !== data.id);
+    list.unshift({ id: data.id, name: data.name, avatar: data.avatar, grade: data.grade, lastAt: Date.now() });
+    LS.set('sm:users', list);
+  },
+  remove(id) { LS.del('sm:u:' + id); LS.set('sm:users', this.list().filter((x) => x.id !== id)); },
+};
+class SupabaseStore {
+  constructor(url, key) { this.url = url.replace(/\/+$/, ''); this.key = key; }
+  headers(extra = {}) { return { apikey: this.key, Authorization: `Bearer ${this.key}`, 'Content-Type': 'application/json', ...extra }; }
+  async load(id) {
+    const r = await fetch(`${this.url}/rest/v1/sm_profiles?id=eq.${encodeURIComponent(id)}&select=data`, { headers: this.headers() });
+    if (!r.ok) throw new Error('load ' + r.status);
+    const rows = await r.json(); return rows[0] ? rows[0].data : null;
+  }
+  async save(data) {
+    const r = await fetch(`${this.url}/rest/v1/sm_profiles`, {
+      method: 'POST', headers: this.headers({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify({ id: data.id, name: data.name, data, updated_at: new Date().toISOString() }),
+    });
+    if (!r.ok) throw new Error('save ' + r.status);
+  }
+  async ping() { const r = await fetch(`${this.url}/rest/v1/sm_profiles?select=id&limit=1`, { headers: this.headers() }); if (!r.ok) throw new Error('HTTP ' + r.status); return true; }
+}
+const DB = {
+  cloud: null, status: 'local', timer: null,
+  init() { const c = LS.get('sm:cloud'); this.cloud = c && c.url && c.key ? new SupabaseStore(c.url, c.key) : null; this.status = this.cloud ? 'cloud' : 'local'; },
+  async loadUser(id) {
+    let local = LocalStore.load(id);
+    if (this.cloud) {
+      try {
+        const remote = await this.cloud.load(id);
+        if (remote && (!local || (remote.updatedAt || 0) > (local.updatedAt || 0))) { local = remote; LocalStore.save(remote); }
+        this.status = 'cloud';
+      } catch (e) { this.status = 'offline'; toast('클라우드에 연결하지 못해 이 기기의 기록을 사용해요.'); }
+    }
+    return local ? migrateUser(local) : null;
+  },
+  saveUser(data) {
+    data.updatedAt = Date.now(); LocalStore.save(data);
+    if (!this.cloud) return;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(async () => { try { await this.cloud.save(data); this.status = 'cloud'; } catch { this.status = 'offline'; } }, 1200);
+  },
+};
+
+/* =====================================================================
+ * 5. 사용자 데이터 모델 & 학습 통계
+ * ===================================================================== */
+const AVATARS = ['🐰', '🐻', '🦊', '🐼', '🐯', '🐸', '🐧', '🦄', '🐱', '🐶', '🐹', '🐨', '🦁', '🐳', '🦖', '🐤'];
+const AV_BG = ['bg-rose-100', 'bg-peach-100', 'bg-butter-100', 'bg-mint-100', 'bg-sky-100', 'bg-lav-100'];
+function newUser(id, name, grade, avatar) {
+  return migrateUser({ id, name, grade, avatar, createdAt: Date.now(), updatedAt: Date.now() });
+}
+function migrateUser(u) {
+  u.settings = Object.assign({ dailyGoal: 20, sessionSize: 10, penOnly: false, autoRecognize: true }, u.settings || {});
+  u.days = u.days || {}; u.units = u.units || {}; u.wrong = u.wrong || []; u.hw = u.hw || {}; u.badges = u.badges || [];
+  return u;
+}
+const dkey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const today = () => dkey();
+function dayStat(u, k = today()) { return u.days[k] || { s: 0, c: 0, t: 0 }; }
+function streakOf(u) {
+  const d = new Date(); let s = 0;
+  if (!(dayStat(u, dkey(d)).s > 0)) d.setDate(d.getDate() - 1);
+  while (dayStat(u, dkey(d)).s > 0) { s++; d.setDate(d.getDate() - 1); }
+  return s;
+}
+function bestStreakOf(u) {
+  const keys = Object.keys(u.days).filter((k) => u.days[k].s > 0).sort(); let best = 0, cur = 0, prev = null;
+  for (const k of keys) { const t = new Date(k + 'T00:00:00'); cur = prev && Math.round((t - prev) / 864e5) === 1 ? cur + 1 : 1; best = Math.max(best, cur); prev = t; }
+  return best;
+}
+function totals(u) { let s = 0, c = 0, days = 0; for (const k in u.days) { s += u.days[k].s; c += u.days[k].c; if (u.days[k].s > 0) days++; } return { s, c, days }; }
+function unitLevel(u, unitId) {
+  const st = u.units[unitId]; if (!st || !st.r) return 0;
+  const r = st.r.slice(-10), n = r.length, acc = [...r].filter((x) => x === '1').length / n;
+  if (n >= 6 && acc >= 0.85) return 2; if (n >= 4 && acc >= 0.6) return 1; return 0;
+}
+function recordResult(u, item, correct, secs) {
+  const k = today(); const d = u.days[k] || (u.days[k] = { s: 0, c: 0, t: 0 });
+  d.s++; if (correct) d.c++; d.t += Math.round(secs);
+  const st = u.units[item.unitId] || (u.units[item.unitId] = { s: 0, c: 0, r: '' });
+  st.s++; if (correct) st.c++; st.r = (st.r + (correct ? '1' : '0')).slice(-12);
+}
+function addWrongNote(u, item, userAns) {
+  if (item.noteId) { const n = u.wrong.find((x) => x.id === item.noteId); if (n) { n.tries = (n.tries || 1) + 1; n.user = userAns; n.at = Date.now(); } return; }
+  u.wrong.unshift({ id: 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), unitId: item.unitId, g: item.g, d: item.d, prob: item.prob, user: userAns, at: Date.now(), resolved: false, tries: 1 });
+  if (u.wrong.length > 300) u.wrong.length = 300;
+}
+
+/* =====================================================================
+ * 6. 손글씨 인식기 (외부 API 없음, 100% 브라우저)
+ * ---------------------------------------------------------------------
+ *  ① 획(stroke) 수집 → ② x축 겹침으로 글자 단위 분할(5, 4, 7 같은 두 획 글자 병합)
+ *  ③ 크기·위치 정규화 후 64px 캔버스에 같은 굵기로 다시 그림(필압·펜 굵기 영향 제거)
+ *  ④ 16×16 격자 밀도 + 가우시안 블러 → 256차원 특징 벡터
+ *  ⑤ 내장 템플릿(획 기반 0~9, /, 변형 증강 ×10) + 학생 개인 샘플과 코사인 유사도 KNN
+ *  ⑥ '-', '.', ',', '/' 는 모양 규칙(가로세로 비, 크기, 직선도)으로 보정
+ * ===================================================================== */
+const HW = (() => {
+  const C = 64, G = 16;
+  const cv = document.createElement('canvas'); cv.width = cv.height = C;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  const PI = Math.PI;
+  const arc = (cx, cy, rx, ry, a0, a1, n = 18) => Array.from({ length: n + 1 }, (_, i) => { const t = a0 + ((a1 - a0) * i) / n; return [cx + rx * Math.cos(t), cy + ry * Math.sin(t)]; });
+  const TEMPL = {
+    0: [[arc(0.5, 0.5, 0.3, 0.46, -PI / 2, 1.5 * PI, 28)], [arc(0.5, 0.5, 0.22, 0.47, -PI / 2, 1.55 * PI, 28)]],
+    1: [[[[0.5, 0], [0.5, 1]]], [[[0.28, 0.22], [0.5, 0], [0.5, 1]]], [[[0.3, 0.2], [0.5, 0], [0.5, 1]], [[0.28, 1], [0.72, 1]]]],
+    2: [[[...arc(0.5, 0.28, 0.3, 0.27, PI, 2.25 * PI), [0.18, 1], [0.86, 1]]], [[...arc(0.5, 0.3, 0.3, 0.3, 1.1 * PI, 2.3 * PI), [0.2, 0.98], [0.5, 0.9], [0.85, 1]]]],
+    3: [[[...arc(0.5, 0.27, 0.28, 0.24, 1.1 * PI, 2.5 * PI), ...arc(0.5, 0.74, 0.31, 0.26, -PI / 2, 0.9 * PI)]], [[[0.2, 0.02], [0.8, 0.02], [0.45, 0.42], ...arc(0.5, 0.72, 0.3, 0.28, -0.6 * PI, 0.9 * PI)]]],
+    4: [[[[0.65, 0], [0.12, 0.68], [0.9, 0.68]], [[0.68, 0.3], [0.68, 1]]], [[[0.2, 0], [0.15, 0.6], [0.85, 0.6]], [[0.7, 0], [0.7, 1]]]],
+    5: [[[[0.8, 0], [0.25, 0], [0.2, 0.45], ...arc(0.48, 0.69, 0.32, 0.3, -0.75 * PI, 0.8 * PI)]], [[[0.25, 0], [0.2, 0.45], ...arc(0.48, 0.69, 0.32, 0.3, -0.75 * PI, 0.8 * PI)], [[0.25, 0], [0.82, 0]]]],
+    6: [[[[0.75, 0.02], [0.5, 0.12], [0.3, 0.35], [0.2, 0.62], ...arc(0.5, 0.71, 0.3, 0.28, PI, 3 * PI)]], [[[0.65, 0], [0.3, 0.45], ...arc(0.5, 0.72, 0.28, 0.27, PI, 3 * PI)]]],
+    7: [[[[0.15, 0], [0.85, 0], [0.4, 1]]], [[[0.1, 0.05], [0.9, 0.02], [0.62, 0.45], [0.45, 1]]], [[[0.15, 0.1], [0.15, 0], [0.85, 0], [0.45, 1]]], [[[0.15, 0], [0.85, 0], [0.42, 1]], [[0.35, 0.5], [0.8, 0.5]]]],
+    8: [[[...arc(0.5, 0.26, 0.25, 0.25, 0.5 * PI, 2.5 * PI), ...arc(0.5, 0.74, 0.3, 0.26, -0.5 * PI, 1.5 * PI)]], [[[0.7, 0.1], ...arc(0.5, 0.26, 0.24, 0.25, -0.2 * PI, -0.5 * PI - 0.9 * PI), ...arc(0.5, 0.72, 0.3, 0.27, -0.5 * PI, 1.5 * PI), [0.72, 0.1]]]],
+    9: [[[...arc(0.5, 0.3, 0.28, 0.29, 0, 2 * PI), [0.78, 0.6], [0.76, 1]]], [[[...arc(0.5, 0.2, 0.3, 0.2, 0, 2 * PI), [0.75, 0.6], [0.62, 1]]]], [[[...arc(0.48, 0.3, 0.28, 0.28, 0.1, 2 * PI + 0.1), [0.74, 0.6], [0.55, 1]]]], [[arc(0.45, 0.3, 0.3, 0.29, 0, 2 * PI), [[0.76, 0.1], [0.76, 1]]]]],
+    '/': [[[[0.85, 0], [0.15, 1]]], [[[0.75, 0], [0.25, 1]]]],
+  };
+  let base = [];
+  const bbox = (strokes) => {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const s of strokes) for (const p of s) { minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]); minY = Math.min(minY, p[1]); maxY = Math.max(maxY, p[1]); }
+    return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY };
+  };
+  function features(strokes) {
+    const b = bbox(strokes), s = 46 / Math.max(b.w, b.h, 1e-6);
+    const ox = C / 2 - (b.minX + b.w / 2) * s, oy = C / 2 - (b.minY + b.h / 2) * s;
+    ctx.clearRect(0, 0, C, C); ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#000'; ctx.fillStyle = '#000';
+    for (const st of strokes) {
+      ctx.beginPath();
+      if (st.length === 1) { ctx.arc(st[0][0] * s + ox, st[0][1] * s + oy, 2.5, 0, 7); ctx.fill(); continue; }
+      st.forEach(([x, y], i) => (i ? ctx.lineTo(x * s + ox, y * s + oy) : ctx.moveTo(x * s + ox, y * s + oy)));
+      ctx.stroke();
+    }
+    const d = ctx.getImageData(0, 0, C, C).data, cell = C / G, v = new Float32Array(G * G);
+    for (let y = 0; y < C; y++) for (let x = 0; x < C; x++) v[((y / cell) | 0) * G + ((x / cell) | 0)] += d[(y * C + x) * 4 + 3] / 255;
+    const out = new Float32Array(G * G); let norm = 0;
+    for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) {
+      let sum = 0, ws = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const yy = y + dy, xx = x + dx; if (yy < 0 || xx < 0 || yy >= G || xx >= G) continue;
+        const w = dx === 0 && dy === 0 ? 4 : dx === 0 || dy === 0 ? 2 : 1; sum += v[yy * G + xx] * w; ws += w;
+      }
+      out[y * G + x] = sum / ws; norm += out[y * G + x] ** 2;
+    }
+    norm = Math.sqrt(norm) || 1; for (let i = 0; i < out.length; i++) out[i] /= norm;
+    out.holes = holes(d, oy + b.minY * s, Math.max(b.h * s, 1));
+    return out;
+  }
+  /** 닫힌 고리(구멍) 찾기: 테두리에서 배경을 채운 뒤 남은 빈 영역 = 구멍. 0·6·8·9 와 1·7 을 구분하는 강한 단서 */
+  function holes(d, top, hh) {
+    const N = C * C, ink = new Uint8Array(N), seen = new Uint8Array(N);
+    for (let i = 0; i < N; i++) ink[i] = d[i * 4 + 3] > 60 ? 1 : 0;
+    const fill = (start) => {
+      const st = [start]; seen[start] = 1; let n = 0, sy = 0;
+      while (st.length) {
+        const i = st.pop(); n++; sy += (i / C) | 0; const x = i % C, y = (i / C) | 0;
+        for (const j of [x > 0 ? i - 1 : -1, x < C - 1 ? i + 1 : -1, y > 0 ? i - C : -1, y < C - 1 ? i + C : -1]) if (j >= 0 && !seen[j] && !ink[j]) { seen[j] = 1; st.push(j); }
+      }
+      return { n, cy: sy / n };
+    };
+    for (let k = 0; k < C; k++) for (const i of [k, (C - 1) * C + k, k * C, k * C + C - 1]) if (!ink[i] && !seen[i]) fill(i);
+    const found = [];
+    for (let i = 0; i < N; i++) if (!ink[i] && !seen[i]) found.push(fill(i));
+    const big = Math.max(0, ...found.map((h) => h.n)); // 획이 교차하며 생긴 작은 틈은 무시
+    return found.filter((h) => h.n >= 14 && h.n >= 0.2 * big).map((h) => (h.cy - top) / hh);
+  }
+  function augment(strokes, n) {
+    const out = [];
+    for (let k = 0; k < n; k++) {
+      const rot = (Math.random() - 0.5) * 0.26, sh = (Math.random() - 0.5) * 0.4, sx = 0.7 + Math.random() * 0.6, c = Math.cos(rot), s = Math.sin(rot);
+      out.push(strokes.map((st) => st.map(([x, y]) => { let X = (x - 0.5) * sx, Y = y - 0.5; X += sh * Y; return [X * c - Y * s + (Math.random() - 0.5) * 0.03, X * s + Y * c + (Math.random() - 0.5) * 0.03]; })));
+    }
+    return out;
+  }
+  function init() {
+    if (base.length) return;
+    for (const [ch, variants] of Object.entries(TEMPL)) for (const st of variants) { base.push({ ch, v: features(st) }); for (const a of augment(st, 10)) base.push({ ch, v: features(a) }); }
+  }
+  const dot = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
+  const encode = (v) => { let mx = 0; for (const x of v) mx = Math.max(mx, x); return Array.from(v, (x) => Math.round((x / (mx || 1)) * 35).toString(36)).join(''); };
+  const decode = (s) => { const v = new Float32Array(s.length); let n = 0; for (let i = 0; i < s.length; i++) { v[i] = parseInt(s[i], 36); n += v[i] * v[i]; } n = Math.sqrt(n) || 1; for (let i = 0; i < v.length; i++) v[i] /= n; return v; };
+  const cache = new Map();
+  function classify(v, samples) {
+    init(); const best = {};
+    const adj = (ch) => { // 구멍 개수·위치에 따른 보정
+      const hs = v.holes || []; if (!hs.length) return '0689'.includes(ch) ? -0.03 : 0;
+      let a = '17/235'.includes(ch) ? -0.1 : 0; const y = hs[0];
+      if (hs.length >= 2) a += ch === '8' ? 0.06 : 0;
+      else if (y < 0.45) a += ch === '9' ? 0.05 : ch === '6' ? -0.07 : 0;
+      else if (y > 0.55) a += ch === '6' ? 0.05 : ch === '9' ? -0.07 : 0;
+      return a;
+    };
+    for (const t of base) { const s = dot(v, t.v); if (!(best[t.ch] >= s)) best[t.ch] = s; }
+    for (const [ch, arr] of Object.entries(samples || {})) for (const q of arr) {
+      let dv = cache.get(q); if (!dv) { dv = decode(q); cache.set(q, dv); }
+      const s = dot(v, dv) + 0.03; if (!(best[ch] >= s)) best[ch] = s;
+    }
+    for (const ch in best) best[ch] += adj(ch);
+    return Object.entries(best).sort((a, b) => b[1] - a[1]);
+  }
+  function group(strokes) {
+    const mkG = (ss) => ({ strokes: ss, ...bbox(ss) });
+    let gs = strokes.map((s) => mkG([s])), merged = true;
+    while (merged) {
+      merged = false; gs.sort((a, b) => a.minX - b.minX);
+      outer: for (let i = 0; i < gs.length; i++) for (let j = i + 1; j < gs.length; j++) {
+        const A = gs[i], B = gs[j], [N, W] = A.w < B.w ? [A, B] : [B, A];
+        const cx = (N.minX + N.maxX) / 2, margin = 0.08 * W.w;
+        const ov = Math.min(A.maxX, B.maxX) - Math.max(A.minX, B.minX);
+        if ((cx > W.minX + margin && cx < W.maxX - margin) || (N.w > 8 && ov > 0.7 * N.w)) {
+          gs.splice(j, 1); gs[i] = mkG(A.strokes.concat(B.strokes)); merged = true; break outer;
+        }
+      }
+    }
+    return gs.sort((a, b) => a.minX - b.minX);
+  }
+  function straightness(st) { let len = 0; for (let i = 1; i < st.length; i++) len += Math.hypot(st[i][0] - st[i - 1][0], st[i][1] - st[i - 1][1]); const ch = Math.hypot(st[st.length - 1][0] - st[0][0], st[st.length - 1][1] - st[0][1]); return len ? ch / len : 0; }
+  /** strokes: [[ [x,y,p], ... ], ...]  →  {text, segs:[{ch, alts, v}]} */
+  function recognize(strokes, boxH, samples) {
+    const pts = strokes.filter((s) => s.length).map((s) => s.map((p) => [p[0], p[1]]));
+    if (!pts.length) return { text: '', segs: [] };
+    const gs = group(pts), H = Math.max(boxH * 0.22, ...gs.map((g) => g.h));
+    const bigs = gs.filter((g) => Math.max(g.w, g.h) >= 0.28 * H).map((g) => g.maxY).sort((a, b) => a - b);
+    const base = bigs.length ? bigs[bigs.length >> 1] : null; // 글자들의 밑줄 위치
+    const segs = gs.map((g) => {
+      const { w, h } = g;
+      if (Math.max(w, h) < 0.28 * H && (h < 0.45 * H)) {
+        const comma = h > 1.3 * w || (base !== null && g.maxY > base + 0.08 * H);
+        return { ch: comma ? ',' : '.', alts: comma ? [',', '.'] : ['.', ','], v: null };
+      }
+      if (w > 1.6 * h && h < 0.3 * H) return { ch: '-', alts: ['-', '/', '1'], v: null };
+      const v = features(g.strokes); let ranked = classify(v, samples).map((r) => r[0]);
+      if (g.strokes.length === 1 && straightness(g.strokes[0]) > 0.93 && h > 0.4 * H) {
+        const st = g.strokes[0], a = st[0], z = st[st.length - 1], top = a[1] < z[1] ? a : z, bot = a[1] < z[1] ? z : a, slope = (top[0] - bot[0]) / (h || 1);
+        const guess = slope > 0.3 ? '/' : Math.abs(slope) < 0.22 ? '1' : null;
+        if (guess) ranked = [guess, ...ranked.filter((c) => c !== guess)]; // 곧은 한 획은 1 또는 /
+      }
+      return { ch: ranked[0], alts: ranked.slice(0, 4), v };
+    });
+    return { text: segs.map((s) => s.ch).join(''), segs };
+  }
+  function learn(u, segs, text) {
+    if (!segs || segs.length !== text.length) return 0; let n = 0;
+    segs.forEach((s, i) => {
+      const ch = text[i]; if (!s.v || !/[0-9/]/.test(ch)) return;
+      const arr = u.hw[ch] || (u.hw[ch] = []); arr.push(encode(s.v)); if (arr.length > 14) arr.shift(); n++;
+    });
+    return n;
+  }
+  function addSample(u, strokes, ch) {
+    const pts = strokes.map((s) => s.map((p) => [p[0], p[1]])); if (!pts.length) return false;
+    const arr = u.hw[ch] || (u.hw[ch] = []); arr.push(encode(features(pts))); if (arr.length > 14) arr.shift(); return true;
+  }
+  return { init, recognize, learn, addSample, _features: features, _templates: TEMPL };
+})();
+
+/* =====================================================================
+ * 7. 펜 입력 캔버스 (Pointer Events: Apple Pencil / S Pen / 손가락 / 마우스)
+ * ===================================================================== */
+class InkPad {
+  constructor(canvas, opts = {}) {
+    this.c = canvas; this.ctx = canvas.getContext('2d'); this.o = Object.assign({ color: '#37324D', width: 3, onEnd: null, onStart: null }, opts);
+    this.strokes = []; this.cur = null; this.mode = 'pen'; this.color = this.o.color; this.pid = null;
+    this._down = (e) => this.down(e); this._move = (e) => this.move(e); this._up = (e) => this.up(e);
+    canvas.addEventListener('pointerdown', this._down); canvas.addEventListener('pointermove', this._move);
+    canvas.addEventListener('pointerup', this._up); canvas.addEventListener('pointercancel', this._up); canvas.addEventListener('pointerleave', this._up);
+    canvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+    this.resize();
+  }
+  resize() {
+    const r = this.c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    this.c.width = Math.max(1, Math.round(r.width * dpr)); this.c.height = Math.max(1, Math.round(r.height * dpr));
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0); this.w = r.width; this.h = r.height; this.redraw();
+  }
+  pos(e) { const r = this.c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top, e.pointerType === 'pen' ? (e.pressure || 0.5) : 0.5]; }
+  down(e) {
+    if (e.pointerType === 'pen') InkPad.penSeen = true;
+    if (App.user && App.user.settings.penOnly && InkPad.penSeen && e.pointerType === 'touch') return; // 손바닥 무시
+    if (this.cur) return;
+    e.preventDefault(); try { this.c.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    this.pid = e.pointerId; this.cur = { pts: [this.pos(e)], color: this.color, width: this.o.width, mode: this.mode };
+    this.o.onStart && this.o.onStart(); this.drawPoint(this.cur);
+  }
+  move(e) {
+    if (!this.cur || e.pointerId !== this.pid) return; e.preventDefault();
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    for (const ev of evs.length ? evs : [e]) { this.cur.pts.push(this.pos(ev)); this.seg(this.cur, this.cur.pts.length - 1); }
+  }
+  up(e) {
+    if (!this.cur || e.pointerId !== this.pid) return;
+    this.strokes.push(this.cur); this.cur = null; this.pid = null; this.o.onEnd && this.o.onEnd();
+  }
+  style(s, p) {
+    const c = this.ctx; c.globalCompositeOperation = s.mode === 'erase' ? 'destination-out' : 'source-over';
+    c.strokeStyle = c.fillStyle = s.color; c.lineCap = 'round'; c.lineJoin = 'round'; c.lineWidth = s.mode === 'erase' ? 26 : s.width * (0.65 + p * 0.7);
+  }
+  drawPoint(s) { const [x, y, p] = s.pts[0]; this.style(s, p); this.ctx.beginPath(); this.ctx.arc(x, y, this.ctx.lineWidth / 2, 0, 7); this.ctx.fill(); }
+  seg(s, i) { const [x0, y0] = s.pts[i - 1], [x1, y1, p] = s.pts[i]; this.style(s, p); const c = this.ctx; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); }
+  redraw() {
+    this.ctx.globalCompositeOperation = 'source-over'; this.ctx.clearRect(0, 0, this.w, this.h);
+    for (const s of this.strokes) { this.drawPoint(s); for (let i = 1; i < s.pts.length; i++) this.seg(s, i); }
+    this.ctx.globalCompositeOperation = 'source-over';
+  }
+  inkStrokes() { return this.strokes.filter((s) => s.mode !== 'erase').map((s) => s.pts); }
+  undo() { this.strokes.pop(); this.redraw(); this.o.onEnd && this.o.onEnd(); }
+  clear() { this.strokes = []; this.cur = null; this.redraw(); }
+}
+InkPad.penSeen = false;
+</script>
+<script>
+'use strict';
+/* =====================================================================
+ * 8. UI 공통
+ * ===================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function tx(s, display = false) {
+  if (!window.katex) return `<span class="font-mono">${esc(s)}</span>`;
+  try { return katex.renderToString(s, { throwOnError: false, displayMode: display }); } catch { return esc(s); }
+}
+/** "글자 $수식$ 글자" 혼합 문자열 → HTML (생성기 내부 문자열만 사용, 사용자 입력은 esc 처리) */
+const md = (s) => String(s).split(/(\$[^$]+\$)/g).map((p) => (p.length > 1 && p[0] === '$' && p.endsWith('$') ? tx('\\displaystyle ' + p.slice(1, -1)) : p)).join('');
+function toast(msg, ms = 2400) {
+  const el = document.createElement('div');
+  el.className = 'toast fixed left-1/2 bottom-8 z-[90] bg-ink-800/90 text-white px-5 py-3 rounded-2xl shadow-soft text-sm sm:text-base max-w-[90vw] text-center';
+  el.style.transform = 'translateX(-50%)'; el.textContent = msg; $('#toast-root').appendChild(el); setTimeout(() => el.remove(), ms);
+}
+function confetti(n = 18) {
+  const em = ['🎉', '⭐', '✨', '💜', '🌟', '🍀', '🎈'];
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement('div'); s.className = 'confetti'; s.textContent = pick(em);
+    s.style.left = Math.random() * 100 + 'vw'; s.style.animationDuration = 1.6 + Math.random() * 1.6 + 's'; s.style.animationDelay = Math.random() * 0.4 + 's';
+    document.body.appendChild(s); setTimeout(() => s.remove(), 3800);
+  }
+}
+function modal(html, { onMount, wide } = {}) {
+  const root = $('#overlay-root');
+  root.innerHTML = `<div class="fixed inset-0 z-[60] bg-ink-800/30 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-3 fade-in" id="modal-bg">
+    <div class="card sheet w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} max-h-[90vh] overflow-y-auto scroll-thin p-5 sm:p-7 bg-white">${html}</div></div>`;
+  $('#modal-bg').addEventListener('pointerdown', (e) => { if (e.target.id === 'modal-bg') closeModal(); });
+  onMount && onMount(root);
+}
+const closeModal = () => { $('#overlay-root').innerHTML = ''; };
+const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+const levelBadge = (d) => ['<span class="px-2 py-0.5 rounded-full bg-mint-100 text-mint-600 text-xs">하</span>', '<span class="px-2 py-0.5 rounded-full bg-butter-100 text-[#B08A00] text-xs">중</span>', '<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-500 text-xs">상</span>'][d];
+const avatarBg = (a) => AV_BG[AVATARS.indexOf(a) % AV_BG.length] || 'bg-lav-100';
+const schoolOf = (g) => (g <= 6 ? '초등' : g <= 9 ? '중학' : '고등');
+
+const App = { user: null, view: 'login', session: null, pads: [], timers: [] };
+function cleanupView() { App.timers.forEach(clearInterval); App.timers = []; App.pads = []; $('#overlay-root').innerHTML = ''; }
+const save = () => App.user && DB.saveUser(App.user);
+function setUrlUser(id) { const u = new URL(location.href); if (id) u.searchParams.set('user', id); else u.searchParams.delete('user'); history.replaceState(null, '', u); }
+const personalLink = (id) => { const u = new URL(location.href); u.search = ''; u.hash = ''; u.searchParams.set('user', id); return u.toString(); };
+
+/* =====================================================================
+ * 9. 로그인 / 프로필 생성
+ * ===================================================================== */
+function slugify(name) { return name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^\p{L}\p{N}_-]/gu, '').slice(0, 24); }
+function renderLogin(opts = {}) {
+  cleanupView(); App.view = 'login'; App.user = null; setUrlUser(opts.prefill || null);
+  const users = LocalStore.list();
+  let grade = 3, avatar = pick(AVATARS);
+  $('#app').innerHTML = `
+  <div class="max-w-4xl mx-auto px-4 pt-10 sm:pt-16 fade-in">
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-20 h-20 rounded-[28px] bg-gradient-to-br from-lav-200 to-sky-200 text-4xl shadow-soft pulse-soft">🧮</div>
+      <h1 class="font-jua text-4xl sm:text-5xl text-ink-700 mt-4">똑똑 연산</h1>
+      <p class="text-ink-500 mt-2">초1부터 고3까지, 하루 10분 연산 습관 🌱</p>
+    </div>
+    ${users.length ? `
+    <div class="card p-5 sm:p-6 mb-5">
+      <h2 class="font-jua text-xl text-ink-700 mb-3">누가 공부할까요?</h2>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        ${users.map((u) => `<button data-uid="${esc(u.id)}" class="btn user-pick rounded-3xl p-4 ${avatarBg(u.avatar)} hover:ring-4 ring-lav-200 text-center">
+          <div class="text-5xl">${esc(u.avatar || '🙂')}</div><div class="font-jua text-lg mt-2 truncate">${esc(u.name)}</div><div class="text-xs text-ink-500">${GRADE_LONG[u.grade] || ''}</div></button>`).join('')}
+      </div>
+    </div>` : ''}
+    <div class="card p-5 sm:p-6">
+      <h2 class="font-jua text-xl text-ink-700 mb-1">${opts.prefill ? '처음 오셨군요! 내 공간 만들기' : '새 친구 만들기'}</h2>
+      <p class="text-sm text-ink-400 mb-4">${opts.prefill ? `링크의 학생 ID <b class="text-lav-600">${esc(opts.prefill)}</b>(으)로 새 공간을 만들어요.` : '이름(닉네임)을 입력하면 나만의 학습 공간과 개인 링크가 생겨요.'}</p>
+      <label class="block text-sm text-ink-500 mb-1">이름 / 닉네임</label>
+      <input id="nm" maxlength="12" value="${esc(opts.prefill || '')}" class="w-full text-lg px-4 py-3 rounded-2xl border-2 border-lav-100 focus:border-lav-300 outline-none bg-lav-50/50" placeholder="예: 지우" />
+      <label class="block text-sm text-ink-500 mt-4 mb-1">학년</label>
+      <div id="grades" class="grid grid-cols-6 gap-2">${GRADE_NAMES.slice(1).map((g, i) => `<button data-g="${i + 1}" class="btn gsel py-2 rounded-xl text-sm font-jua">${g}</button>`).join('')}</div>
+      <label class="block text-sm text-ink-500 mt-4 mb-1">캐릭터</label>
+      <div id="avs" class="flex flex-wrap gap-2">${AVATARS.map((a) => `<button data-a="${a}" class="btn asel w-12 h-12 text-2xl rounded-2xl">${a}</button>`).join('')}</div>
+      <button id="create" class="btn btn-3d w-full mt-6 py-4 rounded-2xl bg-lav-400 hover:bg-lav-500 text-white font-jua text-xl">시작하기 ✨</button>
+    </div>
+    <div class="text-center text-xs text-ink-400 mt-6 space-x-3">
+      <span>${DB.cloud ? '☁️ 클라우드 동기화 켜짐' : '💾 이 기기에 저장 (LocalStorage)'}</span>
+      <button id="cloudcfg" class="underline">클라우드 설정</button>
+    </div>
+  </div>`;
+  const paint = () => {
+    $$('.gsel').forEach((b) => { const on = +b.dataset.g === grade; b.className = `btn gsel py-2 rounded-xl text-sm font-jua ${on ? 'bg-lav-400 text-white shadow-pop' : 'bg-lav-50 text-ink-600'}`; });
+    $$('.asel').forEach((b) => { const on = b.dataset.a === avatar; b.className = `btn asel w-12 h-12 text-2xl rounded-2xl ${on ? 'bg-butter-200 ring-4 ring-butter-300' : 'bg-cream'}`; });
+  };
+  paint();
+  $$('.gsel').forEach((b) => b.addEventListener('click', () => { grade = +b.dataset.g; paint(); }));
+  $$('.asel').forEach((b) => b.addEventListener('click', () => { avatar = b.dataset.a; paint(); }));
+  $$('.user-pick').forEach((b) => b.addEventListener('click', async () => { const u = await DB.loadUser(b.dataset.uid); if (u) login(u); }));
+  $('#cloudcfg').addEventListener('click', openCloudSettings);
+  $('#create').addEventListener('click', async () => {
+    const name = $('#nm').value.trim(); if (!name) { $('#nm').focus(); $('#nm').classList.add('shake'); setTimeout(() => $('#nm').classList.remove('shake'), 500); return toast('이름을 입력해 주세요 🙂'); }
+    let id = opts.prefill || slugify(name) || 'student';
+    if (!opts.prefill) { const base = id; let k = 2; while (LocalStore.load(id)) id = `${base}-${k++}`; }
+    const u = newUser(id, name, grade, avatar); DB.saveUser(u); login(u); setTimeout(() => showLinkModal(true), 350);
+  });
+}
+function login(u) { App.user = u; setUrlUser(u.id); LocalStore.save(u); renderHome(); }
+
+/* =====================================================================
+ * 10. 홈 (오늘의 연산 · 스트릭 · 잔디밭 · 단원 현황)
+ * ===================================================================== */
+function ring(pct, size = 132, stroke = 14, color = '#A792F0') {
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r, off = c * (1 - Math.min(1, pct));
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" class="-rotate-90"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="${stroke}" class="ring-track"/>
+  <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}" style="transition:stroke-dashoffset .8s ease"/></svg>`;
+}
+function heatmapHTML(u, weeks = 20) {
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const dow = (now.getDay() + 6) % 7; const start = new Date(now); start.setDate(now.getDate() - dow - (weeks - 1) * 7);
+  const lv = (s) => (s <= 0 ? 0 : s < 5 ? 1 : s < 10 ? 2 : s < 20 ? 3 : 4);
+  const colors = ['#F1ECFA', '#C9F0DC', '#94E0BA', '#55C893', '#2FAE77'];
+  let cols = '', months = ''; let lastM = -1;
+  for (let w = 0; w < weeks; w++) {
+    let cells = ''; const first = new Date(start); first.setDate(start.getDate() + w * 7);
+    months += `<div class="text-[10px] text-ink-400 h-4 leading-4 w-[14px] sm:w-[16px] overflow-visible whitespace-nowrap">${first.getMonth() !== lastM ? `${first.getMonth() + 1}월` : ''}</div>`; lastM = first.getMonth();
+    for (let d = 0; d < 7; d++) {
+      const day = new Date(start); day.setDate(start.getDate() + w * 7 + d); const k = dkey(day); const st = dayStat(u, k);
+      const future = day > now; const isToday = k === today();
+      cells += `<div class="heat ${isToday ? 'ring-2 ring-lav-400' : ''}" style="background:${future ? 'transparent' : colors[lv(st.s)]}" title="${k} · ${st.s}문제 (정답 ${st.c})"></div>`;
+    }
+    cols += `<div class="flex flex-col gap-[3px]">${cells}</div>`;
+  }
+  return `<div class="overflow-x-auto scroll-thin pb-1"><div class="inline-block"><div class="flex gap-[3px] ml-6">${months}</div>
+    <div class="flex gap-[3px]"><div class="flex flex-col gap-[3px] text-[10px] text-ink-400 w-5 mr-1">${['월', '', '수', '', '금', '', '일'].map((x) => `<div class="heat leading-[14px]">${x}</div>`).join('')}</div>${cols}</div></div></div>
+    <div class="flex items-center justify-end gap-1 text-[11px] text-ink-400 mt-2">적게 ${colors.map((c) => `<span class="heat inline-block" style="background:${c}"></span>`).join('')} 많이</div>`;
+}
+function weekStampsHTML(u) {
+  const now = new Date(); const dow = (now.getDay() + 6) % 7; const mon = new Date(now); mon.setDate(now.getDate() - dow);
+  return ['월', '화', '수', '목', '금', '토', '일'].map((n, i) => {
+    const d = new Date(mon); d.setDate(mon.getDate() + i); const st = dayStat(u, dkey(d)); const isT = i === dow; const future = i > dow;
+    const icon = st.s >= u.settings.dailyGoal ? '⭐' : st.s > 0 ? '🌱' : future ? '' : '·';
+    return `<div class="flex flex-col items-center gap-1"><div class="text-xs ${isT ? 'text-lav-600 font-bold' : 'text-ink-400'}">${n}</div>
+      <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center text-xl ${st.s >= u.settings.dailyGoal ? 'bg-butter-100' : st.s > 0 ? 'bg-mint-100' : 'bg-lav-50'} ${isT ? 'ring-2 ring-lav-300' : ''}">${icon}</div></div>`;
+  }).join('');
+}
+function renderHome() {
+  cleanupView(); App.view = 'home'; const u = App.user; const st = dayStat(u), goal = u.settings.dailyGoal, sk = streakOf(u), best = bestStreakOf(u), tot = totals(u);
+  const acc = tot.s ? Math.round((tot.c / tot.s) * 100) : 0, todayAcc = st.s ? Math.round((st.c / st.s) * 100) : 0;
+  const unresolved = u.wrong.filter((w) => !w.resolved).length, units = unitsOf(u.grade);
+  const date = new Date(); const dateStr = `${date.getMonth() + 1}월 ${date.getDate()}일 ${['일', '월', '화', '수', '목', '금', '토'][date.getDay()]}요일`;
+  const greet = st.s >= goal ? '오늘 목표를 달성했어요! 정말 멋져요 🎉' : st.s > 0 ? `조금만 더! 오늘 목표까지 ${goal - st.s}문제 남았어요.` : sk > 0 ? `${sk}일 연속 학습 중! 오늘도 이어가 볼까요? 🔥` : '오늘의 연산으로 하루를 시작해 봐요!';
+  $('#app').innerHTML = `
+  <div class="max-w-6xl mx-auto px-3 sm:px-5 pt-4 fade-in">
+    <header class="flex items-center gap-3 mb-4">
+      <div class="w-14 h-14 rounded-2xl ${avatarBg(u.avatar)} flex items-center justify-center text-3xl">${esc(u.avatar)}</div>
+      <div class="flex-1 min-w-0"><div class="font-jua text-2xl text-ink-700 truncate">${esc(u.name)}</div><div class="text-sm text-ink-400">${GRADE_LONG[u.grade]} · ${dateStr}</div></div>
+      <button id="btn-link" class="btn px-3 py-2 rounded-2xl bg-white shadow-soft text-sm">🔗<span class="hidden sm:inline"> 내 링크</span></button>
+      <button id="btn-set" class="btn px-3 py-2 rounded-2xl bg-white shadow-soft text-sm">⚙️<span class="hidden sm:inline"> 설정</span></button>
+      <button id="btn-out" class="btn px-3 py-2 rounded-2xl bg-white shadow-soft text-sm">👋<span class="hidden sm:inline"> 친구 바꾸기</span></button>
+    </header>
+    <div class="grid gap-4 lg:grid-cols-3">
+      <section class="card p-5 sm:p-6 lg:col-span-2 bg-gradient-to-br from-white to-lav-50">
+        <div class="flex flex-col sm:flex-row items-center gap-5">
+          <div class="relative shrink-0">${ring(st.s / goal)}<div class="absolute inset-0 flex flex-col items-center justify-center"><div class="font-jua text-3xl text-ink-700">${st.s}<span class="text-base text-ink-400">/${goal}</span></div><div class="text-xs text-ink-400">오늘 푼 문제</div></div></div>
+          <div class="flex-1 text-center sm:text-left">
+            <div class="text-sm text-lav-600 font-bold">📅 오늘의 연산</div>
+            <h2 class="font-jua text-2xl sm:text-3xl text-ink-700 mt-1">${greet}</h2>
+            <div class="flex flex-wrap gap-2 justify-center sm:justify-start mt-3 text-sm">
+              <span class="px-3 py-1 rounded-full bg-mint-100 text-mint-600">✅ 맞은 문제 ${st.c}</span>
+              <span class="px-3 py-1 rounded-full bg-sky-100 text-sky-500">🎯 정답률 ${todayAcc}%</span>
+              <span class="px-3 py-1 rounded-full bg-peach-100 text-peach-500">⏱ ${Math.round(st.t / 60)}분</span>
+            </div>
+            <button id="btn-daily" class="btn btn-3d mt-4 w-full sm:w-auto px-8 py-4 rounded-2xl bg-lav-400 hover:bg-lav-500 text-white font-jua text-xl">${st.s ? '오늘의 연산 이어서 하기 ▶' : '오늘의 연산 시작 ▶'}</button>
+            <div class="text-xs text-ink-400 mt-2">${GRADE_NAMES[u.grade]} 단원을 섞어 ${u.settings.sessionSize}문제 · 실력에 맞춰 난이도 자동 조절${unresolved ? ' · 오답 복습 포함' : ''}</div>
+          </div>
+        </div>
+      </section>
+      <section class="card p-5 sm:p-6 bg-gradient-to-br from-white to-peach-50">
+        <div class="flex items-center justify-between"><div class="text-sm text-peach-500 font-bold">🔥 연속 학습</div><div class="text-xs text-ink-400">최고 ${best}일</div></div>
+        <div class="font-jua text-5xl text-ink-700 mt-2">${sk}<span class="text-xl text-ink-400">일째</span></div>
+        <div class="text-sm text-ink-500 mt-1">${sk ? '매일 조금씩, 불꽃을 지켜요!' : '오늘 한 문제만 풀어도 불꽃이 켜져요!'}</div>
+        <div class="flex justify-between mt-4">${weekStampsHTML(u)}</div>
+      </section>
+      <section class="card p-5 sm:p-6 lg:col-span-2">
+        <div class="flex items-center justify-between mb-3"><h3 class="font-jua text-xl text-ink-700">🌿 나의 연산 잔디밭</h3><div class="text-xs text-ink-400">최근 20주</div></div>
+        ${heatmapHTML(u)}
+        <div class="grid grid-cols-3 gap-3 mt-4 text-center">
+          <div class="rounded-2xl bg-lav-50 p-3"><div class="font-jua text-2xl text-ink-700">${tot.days}</div><div class="text-xs text-ink-400">공부한 날</div></div>
+          <div class="rounded-2xl bg-mint-50 p-3"><div class="font-jua text-2xl text-ink-700">${tot.s}</div><div class="text-xs text-ink-400">누적 문제</div></div>
+          <div class="rounded-2xl bg-sky-50 p-3"><div class="font-jua text-2xl text-ink-700">${acc}%</div><div class="text-xs text-ink-400">전체 정답률</div></div>
+        </div>
+      </section>
+      <section class="grid gap-4">
+        <button id="btn-select" class="btn card p-5 text-left hover:ring-4 ring-sky-100 flex items-center gap-4"><div class="w-14 h-14 rounded-2xl bg-sky-100 text-3xl flex items-center justify-center">📚</div><div><div class="font-jua text-xl text-ink-700">단원 골라 풀기</div><div class="text-sm text-ink-400">초1~고3 · 난이도 하/중/상</div></div></button>
+        <button id="btn-notes" class="btn card p-5 text-left hover:ring-4 ring-rose-100 flex items-center gap-4"><div class="w-14 h-14 rounded-2xl bg-rose-100 text-3xl flex items-center justify-center">📒</div><div class="flex-1"><div class="font-jua text-xl text-ink-700">오답 노트</div><div class="text-sm text-ink-400">틀린 문제를 다시 풀면 해결 스티커!</div></div>${unresolved ? `<span class="px-3 py-1 rounded-full bg-rose-400 text-white font-jua">${unresolved}</span>` : ''}</button>
+        <button id="btn-train" class="btn card p-5 text-left hover:ring-4 ring-butter-100 flex items-center gap-4"><div class="w-14 h-14 rounded-2xl bg-butter-100 text-3xl flex items-center justify-center">✍️</div><div><div class="font-jua text-xl text-ink-700">내 글씨 익히기</div><div class="text-sm text-ink-400">내 손글씨를 학습시켜 인식률 UP (${Object.values(u.hw).reduce((s, a) => s + a.length, 0)}개 학습됨)</div></div></button>
+      </section>
+      <section class="card p-5 sm:p-6 lg:col-span-3">
+        <div class="flex items-center justify-between mb-3"><h3 class="font-jua text-xl text-ink-700">📈 ${GRADE_LONG[u.grade]} 단원별 실력</h3><button id="btn-select2" class="text-sm text-lav-600">다른 학년 보기 →</button></div>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">${units.map((un) => {
+          const s = u.units[un.id], a = s && s.s ? Math.round((s.c / s.s) * 100) : 0, lv = unitLevel(u, un.id);
+          return `<button data-unit="${un.id}" class="btn unit-quick text-left rounded-2xl bg-cream border border-lav-100 p-4 hover:bg-lav-50">
+            <div class="flex items-center justify-between"><div class="font-jua text-ink-700">${un.name}</div>${levelBadge(lv)}</div>
+            <div class="text-xs text-ink-400 mt-0.5">${un.desc}</div>
+            <div class="h-2 rounded-full bg-lav-100 mt-3 overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-mint-300 to-mint-400" style="width:${a}%"></div></div>
+            <div class="text-xs text-ink-400 mt-1">${s ? `${s.s}문제 · 정답률 ${a}%` : '아직 안 풀었어요'}</div></button>`;
+        }).join('')}</div>
+      </section>
+    </div>
+  </div>`;
+  $('#btn-daily').addEventListener('click', startDaily);
+  $('#btn-select').addEventListener('click', () => renderSelect(u.grade));
+  $('#btn-select2').addEventListener('click', () => renderSelect(u.grade));
+  $('#btn-notes').addEventListener('click', () => renderNotes());
+  $('#btn-train').addEventListener('click', openTrainer);
+  $('#btn-link').addEventListener('click', () => showLinkModal(false));
+  $('#btn-set').addEventListener('click', openSettings);
+  $('#btn-out').addEventListener('click', () => renderLogin());
+  $$('.unit-quick').forEach((b) => b.addEventListener('click', () => { const un = unitById(b.dataset.unit); startSession(makeItems(un, unitLevel(u, un.id), u.settings.sessionSize), 'custom', `${un.name}`); }));
+}
+
+/* =====================================================================
+ * 11. 단원 선택
+ * ===================================================================== */
+function renderSelect(g) {
+  cleanupView(); App.view = 'select'; const u = App.user; let unitId = null, d = 1, n = u.settings.sessionSize;
+  $('#app').innerHTML = `
+  <div class="max-w-5xl mx-auto px-3 sm:px-5 pt-4 pb-40 fade-in">
+    <div class="flex items-center gap-3 mb-4"><button id="back" class="btn w-11 h-11 rounded-2xl bg-white shadow-soft text-xl">←</button><h2 class="font-jua text-2xl text-ink-700">단원 골라 풀기</h2></div>
+    <div class="card p-3 sm:p-4 mb-4">
+      ${['초등', '중학', '고등'].map((sch, si) => `<div class="flex items-center gap-2 ${si ? 'mt-2' : ''}"><div class="w-10 text-sm text-ink-400 shrink-0">${sch}</div><div class="flex gap-2 flex-wrap">
+        ${GRADE_NAMES.map((gn, gi) => ({ gn, gi })).filter(({ gi }) => gi && schoolOf(gi) === sch).map(({ gn, gi }) => `<button data-g="${gi}" class="btn gtab px-4 py-2 rounded-xl font-jua ${gi === g ? 'bg-lav-400 text-white shadow-pop' : 'bg-lav-50 text-ink-600'}">${gn}</button>`).join('')}</div></div>`).join('')}
+    </div>
+    <div id="ulist" class="grid sm:grid-cols-2 gap-3">${unitsOf(g).map((un) => {
+      const s = u.units[un.id], a = s && s.s ? Math.round((s.c / s.s) * 100) : null;
+      return `<button data-unit="${un.id}" class="btn usel card p-5 text-left border-2 border-transparent">
+        <div class="flex items-center justify-between"><div class="font-jua text-xl text-ink-700">${un.name}</div><div class="text-xs text-ink-400">${a === null ? 'NEW' : `정답률 ${a}%`}</div></div>
+        <div class="text-sm text-ink-400 mt-1">${un.desc}</div></button>`;
+    }).join('')}</div>
+  </div>
+  <div class="fixed inset-x-0 bottom-0 z-30 p-3"><div class="max-w-5xl mx-auto card p-4 bg-white/95 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+    <div class="flex items-center gap-2"><span class="text-sm text-ink-400 w-12">난이도</span>${LEVELS.map((l, i) => `<button data-d="${i}" class="btn dsel px-4 py-2 rounded-xl font-jua">${l}</button>`).join('')}</div>
+    <div class="flex items-center gap-2"><span class="text-sm text-ink-400 w-12">문제 수</span>${[5, 10, 15, 20].map((x) => `<button data-n="${x}" class="btn nsel px-3 py-2 rounded-xl font-jua">${x}</button>`).join('')}</div>
+    <button id="go" class="btn btn-3d sm:ml-auto px-8 py-3 rounded-2xl bg-lav-300 text-white font-jua text-xl" disabled>단원을 골라요</button>
+  </div></div>`;
+  const paint = () => {
+    $$('.dsel').forEach((b) => { const on = +b.dataset.d === d; b.className = `btn dsel px-4 py-2 rounded-xl font-jua ${on ? ['bg-mint-300 text-white', 'bg-butter-300 text-ink-700', 'bg-rose-300 text-white'][d] : 'bg-lav-50 text-ink-600'}`; });
+    $$('.nsel').forEach((b) => { b.className = `btn nsel px-3 py-2 rounded-xl font-jua ${+b.dataset.n === n ? 'bg-sky-300 text-white' : 'bg-lav-50 text-ink-600'}`; });
+    $$('.usel').forEach((b) => b.classList.toggle('!border-lav-300', b.dataset.unit === unitId));
+    $$('.usel').forEach((b) => b.classList.toggle('bg-lav-50', b.dataset.unit === unitId));
+    const go = $('#go'); go.disabled = !unitId; go.className = `btn btn-3d sm:ml-auto px-8 py-3 rounded-2xl ${unitId ? 'bg-lav-400 hover:bg-lav-500' : 'bg-lav-200'} text-white font-jua text-xl`;
+    go.textContent = unitId ? `${unitById(unitId).name} 시작 ▶` : '단원을 골라요';
+  };
+  paint();
+  $('#back').addEventListener('click', renderHome);
+  $$('.gtab').forEach((b) => b.addEventListener('click', () => renderSelect(+b.dataset.g)));
+  $$('.usel').forEach((b) => b.addEventListener('click', () => { unitId = b.dataset.unit; d = unitLevel(u, unitId); paint(); }));
+  $$('.dsel').forEach((b) => b.addEventListener('click', () => { d = +b.dataset.d; paint(); }));
+  $$('.nsel').forEach((b) => b.addEventListener('click', () => { n = +b.dataset.n; paint(); }));
+  $('#go').addEventListener('click', () => { if (!unitId) return; const un = unitById(unitId); startSession(makeItems(un, d, n), 'custom', un.name); });
+}
+
+/* =====================================================================
+ * 12. 세션 구성 (단원 연습 · 오늘의 연산 · 오답 복습)
+ * ===================================================================== */
+function genUnique(un, d, seen) {
+  for (let t = 0; t < 8; t++) { const p = un.gen(d); const key = p.prompt + '|' + p.expr; if (!seen.has(key)) { seen.add(key); return p; } }
+  return un.gen(d);
+}
+function makeItems(un, d, n) { const seen = new Set(); return Array.from({ length: n }, () => ({ unitId: un.id, g: un.g, d, prob: genUnique(un, d, seen) })); }
+function startDaily() {
+  const u = App.user, n = u.settings.sessionSize, items = [], seen = new Set();
+  const reviews = u.wrong.filter((w) => !w.resolved).slice(-2).reverse();
+  reviews.forEach((w) => items.push({ unitId: w.unitId, g: w.g, d: w.d, prob: w.prob, noteId: w.id, review: true }));
+  let pool = shuffle(unitsOf(u.grade)); let k = 0;
+  while (items.length < n) {
+    let un = pool[k++ % pool.length];
+    if (u.grade > 1 && Math.random() < 0.15) un = pick(unitsOf(u.grade - 1)); // 이전 학년 복습 한 스푼
+    const d = unitLevel(u, un.id); items.push({ unitId: un.id, g: un.g, d, prob: genUnique(un, d, seen) });
+  }
+  startSession(shuffle(items), 'daily', '오늘의 연산');
+}
+function startSession(items, mode, title) {
+  App.session = { items, mode, title, idx: 0, results: [], startedAt: Date.now(), qStart: Date.now(), attempt: 0 };
+  renderSolve();
+}
+
+/* =====================================================================
+ * 13. 문제 풀이 화면 (연습장 캔버스 + 손글씨 답안 + 키패드)
+ * ===================================================================== */
+const PRAISE = ['정답이에요! 최고예요 🎉', '완벽해요! 계산 천재 ✨', '딩동댕! 아주 잘했어요 👏', '맞았어요! 실력이 쑥쑥 🌱', '정확해요! 이 기세로 계속 가요 🚀', '훌륭해요! 차근차근 잘 풀었어요 💜'];
+const CHEER = ['괜찮아요, 틀리면서 배우는 거예요 😊', '아쉬워요! 어디서 헷갈렸는지 같이 볼까요?', '거의 다 왔어요! 한 번만 더 살펴봐요 💪', '실수는 실력이 되는 재료예요 🌱'];
+let ansPad = null, scratchPad = null, lastRec = null, recTimer = null;
+function renderSolve() {
+  cleanupView(); App.view = 'solve'; HW.init();
+  const S = App.session, it = S.items[S.idx], un = unitById(it.unitId), p = it.prob;
+  S.qStart = Date.now(); S.attempt = 0; lastRec = null;
+  $('#app').innerHTML = `
+  <div class="max-w-6xl mx-auto px-3 sm:px-5 pt-3 fade-in">
+    <div class="flex items-center gap-3 mb-3">
+      <button id="quit" class="btn w-11 h-11 rounded-2xl bg-white shadow-soft text-lg shrink-0">✕</button>
+      <div class="flex-1 min-w-0">
+        <div class="flex justify-between text-sm text-ink-500 mb-1"><span class="truncate font-jua">${esc(S.title)}</span><span class="font-jua">${S.idx + 1} / ${S.items.length}</span></div>
+        <div class="h-3 bg-lav-100 rounded-full overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-lav-300 via-sky-300 to-mint-300 transition-all" style="width:${(S.idx / S.items.length) * 100}%"></div></div>
+      </div>
+      <div id="timer" class="px-3 py-2 rounded-2xl bg-white shadow-soft text-ink-600 font-jua shrink-0">00:00</div>
+    </div>
+    <div class="solve-grid">
+      <div class="space-y-4 min-w-0">
+        <div class="card p-5 sm:p-7" id="pcard">
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <span class="px-2 py-0.5 rounded-full bg-lav-100 text-lav-600">${GRADE_NAMES[un.g]}</span>
+            <span class="px-2 py-0.5 rounded-full bg-sky-100 text-sky-500">${un.name}</span>${levelBadge(it.d)}
+            ${it.review ? '<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-500">📒 오답 복습</span>' : ''}
+          </div>
+          <div class="text-lg sm:text-xl text-ink-700 mt-3 leading-relaxed">${md(p.prompt)}</div>
+          ${p.expr ? `<div class="problem-expr text-center py-4 sm:py-6 overflow-x-auto scroll-thin">${tx(p.expr, true)}</div>` : '<div class="h-2"></div>'}
+        </div>
+        <div class="card p-3">
+          <div class="flex items-center gap-2 mb-2 px-1 flex-wrap">
+            <span class="font-jua text-ink-600 mr-1">📝 연습장</span>
+            ${[['#37324D', '검정'], ['#3E97DB', '파랑'], ['#E4566F', '빨강']].map(([c, n]) => `<button data-color="${c}" title="${n}" class="btn pen-color w-8 h-8 rounded-full border-4 border-white shadow" style="background:${c}"></button>`).join('')}
+            <button id="sp-erase" class="btn px-3 py-1.5 rounded-xl bg-lav-50 text-sm">🧽 지우개</button>
+            <div class="ml-auto flex gap-2"><button id="sp-undo" class="btn px-3 py-1.5 rounded-xl bg-lav-50 text-sm">↩️</button><button id="sp-clear" class="btn px-3 py-1.5 rounded-xl bg-lav-50 text-sm">🗑 전체 지우기</button></div>
+          </div>
+          <div class="paper rounded-2xl overflow-hidden border border-lav-100 h-[260px] sm:h-[360px] lg:h-[420px]"><canvas id="scratch" class="ink-canvas"></canvas></div>
+        </div>
+      </div>
+      <div class="space-y-4 min-w-0">
+        <div class="card p-4 sm:p-5">
+          <div class="flex items-center justify-between mb-2"><div class="font-jua text-lg text-ink-700">✏️ 답 쓰기</div>
+            <div class="flex gap-2"><button id="ap-undo" class="btn px-3 py-1.5 rounded-xl bg-lav-50 text-sm">↩️</button><button id="ap-clear" class="btn px-3 py-1.5 rounded-xl bg-lav-50 text-sm">지우기</button><button id="ap-rec" class="btn px-3 py-1.5 rounded-xl bg-sky-100 text-sky-500 text-sm">🔍 인식</button></div></div>
+          <div class="answer-paper rounded-2xl border-2 border-dashed border-lav-200 h-[130px] sm:h-[150px] overflow-hidden relative">
+            <canvas id="anspad" class="ink-canvas"></canvas>
+            <div id="ap-ph" class="absolute inset-0 flex items-center justify-center text-ink-400/60 pointer-events-none text-sm text-center px-4">여기에 펜으로 답을 크게 써 보세요<br/>(분수는 3/4, 여러 개는 쉼표 2,5)</div>
+          </div>
+          <div id="chips" class="flex flex-wrap gap-1.5 min-h-[36px] mt-2 items-center"></div>
+          <div class="flex items-center gap-2 mt-2">
+            <input id="answer" inputmode="none" autocomplete="off" class="flex-1 min-w-0 text-2xl font-jua tracking-wider px-4 py-3 rounded-2xl border-2 border-lav-100 focus:border-lav-300 outline-none bg-lav-50/40" placeholder="답" />
+          </div>
+          ${p.format ? `<div class="text-xs text-lav-600 mt-1">✳️ 답 형식: <b>${esc(p.format)}</b> 처럼 쉼표로 구분</div>` : ''}
+          <div class="grid grid-cols-4 gap-2 mt-3 no-select" id="keypad">
+            ${['7', '8', '9', '⌫', '4', '5', '6', '/', '1', '2', '3', '-', '0', '.', ',', 'C'].map((k) => `<button data-k="${k}" class="btn btn-3d key py-3 sm:py-3.5 rounded-2xl font-jua text-2xl ${/\d/.test(k) ? 'bg-white text-ink-700 border border-lav-100' : k === 'C' || k === '⌫' ? 'bg-rose-50 text-rose-400' : 'bg-lav-50 text-lav-600'}">${k === '/' ? '분수 /' : k === ',' ? ', 쉼표' : k}</button>`).join('')}
+          </div>
+          <button id="submit" class="btn btn-3d w-full mt-4 py-4 rounded-2xl bg-mint-400 hover:bg-mint-500 text-white font-jua text-2xl">채점하기 ✔</button>
+          ${p.hint ? `<button id="peek-hint" class="w-full mt-2 text-sm text-ink-400 hover:text-lav-600">💡 막혔나요? 힌트 보기</button><div id="hint-box" class="hidden hint mt-2 rounded-2xl bg-butter-50 border border-butter-200 p-3 text-ink-600">${md(p.hint)}</div>` : ''}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="sheet"></div>`;
+  // timer
+  const tEl = $('#timer'); App.timers.push(setInterval(() => { tEl.textContent = fmtTime((Date.now() - S.startedAt) / 1000); }, 1000));
+  // pads
+  requestAnimationFrame(() => {
+    scratchPad = new InkPad($('#scratch'), { width: 2.6 });
+    ansPad = new InkPad($('#anspad'), {
+      width: 4.2,
+      onStart: () => { clearTimeout(recTimer); $('#ap-ph') && ($('#ap-ph').style.display = 'none'); },
+      onEnd: () => { clearTimeout(recTimer); if (App.user.settings.autoRecognize) recTimer = setTimeout(runRecognition, 650); },
+    });
+    App.pads = [scratchPad, ansPad];
+  });
+  $$('.pen-color').forEach((b) => b.addEventListener('click', () => { scratchPad.mode = 'pen'; scratchPad.color = b.dataset.color; markTool(b); }));
+  $('#sp-erase').addEventListener('click', (e) => { scratchPad.mode = 'erase'; markTool(e.currentTarget); });
+  $('#sp-undo').addEventListener('click', () => scratchPad.undo());
+  $('#sp-clear').addEventListener('click', () => scratchPad.clear());
+  $('#ap-undo').addEventListener('click', () => { ansPad.undo(); if (!ansPad.strokes.length) resetAnswerPad(); });
+  $('#ap-clear').addEventListener('click', () => { resetAnswerPad(); $('#answer').value = ''; });
+  $('#ap-rec').addEventListener('click', runRecognition);
+  $$('.key').forEach((b) => b.addEventListener('click', () => keyPress(b.dataset.k)));
+  $('#answer').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAnswer(); });
+  $('#submit').addEventListener('click', submitAnswer);
+  $('#quit').addEventListener('click', () => { if (S.results.length ? confirm('지금까지 푼 기록은 저장돼요. 그만할까요?') : true) { S.results.length ? renderResult() : renderHome(); } });
+  const ph = $('#peek-hint'); if (ph) ph.addEventListener('click', () => { $('#hint-box').classList.toggle('hidden'); });
+  markTool($$('.pen-color')[0]);
+}
+function markTool(el) { $$('.pen-color, #sp-erase').forEach((b) => b.classList.remove('ring-4', 'ring-lav-300')); el.classList.add('ring-4', 'ring-lav-300'); }
+function resetAnswerPad() { ansPad && ansPad.clear(); lastRec = null; $('#chips').innerHTML = ''; const ph = $('#ap-ph'); if (ph) ph.style.display = ''; }
+function keyPress(k) {
+  const inp = $('#answer');
+  if (k === '⌫') inp.value = inp.value.slice(0, -1);
+  else if (k === 'C') { inp.value = ''; resetAnswerPad(); }
+  else inp.value += k;
+}
+function runRecognition() {
+  if (!ansPad || !ansPad.strokes.length) return;
+  const rec = HW.recognize(ansPad.inkStrokes(), ansPad.h, App.user.hw); lastRec = rec;
+  $('#answer').value = rec.text; paintChips();
+}
+function paintChips() {
+  const box = $('#chips'); if (!lastRec) { box.innerHTML = ''; return; }
+  box.innerHTML = `<span class="text-xs text-ink-400 mr-1">인식:</span>` + lastRec.segs.map((s, i) => `<button data-i="${i}" class="btn chip-cycle min-w-[36px] h-9 px-2 rounded-xl bg-sky-50 border border-sky-200 font-jua text-xl text-sky-500" title="눌러서 다른 후보로 바꾸기">${esc(s.ch)}</button>`).join('') + `<span class="text-[11px] text-ink-400 ml-1">글자를 누르면 다른 후보로 바뀌어요</span>`;
+  $$('.chip-cycle', box).forEach((b) => b.addEventListener('click', () => {
+    const s = lastRec.segs[+b.dataset.i]; const alts = s.alts.length ? s.alts : [s.ch];
+    s.ch = alts[(alts.indexOf(s.ch) + 1) % alts.length]; $('#answer').value = lastRec.segs.map((x) => x.ch).join(''); paintChips();
+  }));
+}
+function submitAnswer() {
+  if ($('#sheet').innerHTML) return;
+  const S = App.session, it = S.items[S.idx], u = App.user;
+  let input = $('#answer').value;
+  if (!input && ansPad && ansPad.strokes.length) { runRecognition(); input = $('#answer').value; }
+  const res = gradeAnswer(it.prob, input);
+  if (res.status === 'invalid') { $('#answer').classList.add('shake'); setTimeout(() => $('#answer').classList.remove('shake'), 450); return toast(input ? '답의 모양을 확인해 주세요. (예: 12, -3, 3/4, 0.5, 2,5)' : '답을 쓰거나 키패드로 입력해 주세요 ✏️'); }
+  // 내 글씨 학습: 제출한 답과 인식 조각 수가 같으면 개인 템플릿으로 저장
+  if (lastRec) { const t = normalizeInput(input); HW.learn(u, lastRec.segs, t); }
+  S.attempt++;
+  const secs = (Date.now() - S.qStart) / 1000, first = S.attempt === 1;
+  if (first) {
+    recordResult(u, it, res.status === 'correct', secs);
+    S.results[S.idx] = { correct: res.status === 'correct', user: input, retried: false };
+    if (res.status !== 'correct') addWrongNote(u, it, input);
+    else if (it.noteId) { const n = u.wrong.find((w) => w.id === it.noteId); if (n) { n.resolved = true; n.resolvedAt = Date.now(); } }
+    const st = dayStat(u); if (res.status === 'correct' && st.s === u.settings.dailyGoal) setTimeout(() => { confetti(40); toast('🎯 오늘의 목표 달성! 정말 대단해요!', 3000); }, 400);
+  } else {
+    S.results[S.idx].retried = true;
+    if (res.status === 'correct' && it.noteId) { const n = u.wrong.find((w) => w.id === it.noteId); if (n) n.tries = (n.tries || 1) + 1; }
+  }
+  save();
+  if (res.status === 'correct') showCorrect(res, first); else showWrong(res, input);
+}
+function showCorrect(res, first) {
+  const S = App.session, it = S.items[S.idx];
+  confetti(first ? 14 : 8);
+  $('#sheet').innerHTML = `<div class="fixed inset-x-0 bottom-0 z-40 p-3 sm:p-5"><div class="sheet max-w-3xl mx-auto card p-5 sm:p-6 bg-mint-50 border-mint-200">
+    <div class="flex items-center gap-4"><div class="text-5xl pop-in">${first ? '⭕' : '👏'}</div>
+      <div class="flex-1"><div class="font-jua text-2xl text-mint-600">${first ? pick(PRAISE) : '스스로 고쳐서 맞혔어요! 멋져요!'}</div>
+      <div class="text-ink-500 mt-1">정답: ${tx(ansTex(it.prob))}${it.review && first ? ' · 오답 노트에서 <b>해결</b> 스티커를 받았어요 🏅' : ''}</div>
+      ${res.note ? `<div class="text-sm text-[#B08A00] mt-1">💡 ${res.note}</div>` : ''}</div></div>
+    <div class="flex gap-2 mt-4">
+      <button id="show-sol" class="btn flex-1 py-3 rounded-2xl bg-white text-ink-600 font-jua">풀이 확인</button>
+      <button id="next" class="btn btn-3d flex-[2] py-3 rounded-2xl bg-mint-400 hover:bg-mint-500 text-white font-jua text-xl">${S.idx + 1 < S.items.length ? '다음 문제 →' : '결과 보기 🏁'}</button>
+    </div><div id="sol" class="hidden mt-3"></div></div></div>`;
+  $('#next').addEventListener('click', nextProblem); $('#next').focus();
+  $('#show-sol').addEventListener('click', () => { const b = $('#sol'); b.classList.toggle('hidden'); b.innerHTML = stepsHTML(it.prob, true); });
+}
+function stepsHTML(p, all) {
+  return `<ol class="space-y-2">${p.steps.map((s, i) => `<li class="step-item ${all || i === 0 ? '' : 'hidden'} fade-in flex gap-3 rounded-2xl bg-white border border-lav-100 p-3"><span class="shrink-0 w-7 h-7 rounded-full bg-lav-100 text-lav-600 font-jua flex items-center justify-center">${i + 1}</span><div class="text-ink-700 leading-relaxed pt-0.5">${md(s)}</div></li>`).join('')}</ol>`;
+}
+function showWrong(res, input) {
+  const S = App.session, it = S.items[S.idx], p = it.prob, final = S.attempt >= 2;
+  $('#pcard').classList.add('shake'); setTimeout(() => $('#pcard') && $('#pcard').classList.remove('shake'), 450);
+  $('#sheet').innerHTML = `<div class="fixed inset-0 z-40 bg-ink-800/20 flex items-end justify-center p-3 sm:p-5"><div class="sheet w-full max-w-3xl card p-5 sm:p-6 bg-white max-h-[85vh] overflow-y-auto scroll-thin">
+    <div class="flex items-center gap-4"><div class="text-5xl pop-in">${final ? '📘' : '🤔'}</div>
+      <div class="flex-1"><div class="font-jua text-2xl text-rose-500">${final ? '이번엔 풀이를 같이 따라가 봐요' : pick(CHEER)}</div>
+      <div class="text-ink-500 mt-1">내 답: <b class="text-rose-400 font-jua text-lg">${esc(input)}</b></div></div></div>
+    <div class="mt-4 rounded-2xl bg-lav-50 border border-lav-100 p-4">
+      <div class="text-sm font-bold text-lav-600 mb-1">🧑‍🏫 튜터의 한마디 — 어디서 헷갈렸을까?</div>
+      <div class="text-ink-700 leading-relaxed">${md(res.msg)}</div>
+    </div>
+    ${p.hint ? `<div class="hint mt-3 rounded-2xl bg-butter-50 border border-butter-200 p-4"><div class="text-sm font-bold text-[#B08A00] mb-1">💡 핵심 개념</div><div class="text-ink-700 leading-relaxed">${md(p.hint)}</div></div>` : ''}
+    <div class="mt-4"><div class="flex items-center justify-between mb-2"><div class="font-jua text-lg text-ink-700">🪜 차근차근 풀이</div><div class="text-xs text-ink-400"><span id="stepc">1</span> / ${p.steps.length} 단계</div></div>
+      <div id="steps">${stepsHTML(p, false)}</div>
+      <div class="flex gap-2 mt-2"><button id="step-next" class="btn flex-1 py-2.5 rounded-2xl bg-lav-100 text-lav-600 font-jua">다음 단계 보기 ↓</button><button id="step-all" class="btn px-4 py-2.5 rounded-2xl bg-lav-50 text-ink-500 text-sm">모두 보기</button></div>
+    </div>
+    <div id="ans-reveal" class="${final ? '' : 'hidden'} mt-3 rounded-2xl bg-mint-50 border border-mint-200 p-3 text-center">정답은 <span class="font-jua text-xl text-mint-600">${tx(ansTex(p))}</span> 이에요.</div>
+    <div class="flex gap-2 mt-4">
+      ${final ? '' : '<button id="retry" class="btn btn-3d flex-1 py-3 rounded-2xl bg-sky-300 hover:bg-sky-400 text-white font-jua text-lg">다시 도전 💪</button>'}
+      <button id="next" class="btn btn-3d flex-1 py-3 rounded-2xl ${final ? 'bg-lav-400' : 'bg-lav-300'} text-white font-jua text-lg">${S.idx + 1 < S.items.length ? '다음 문제 →' : '결과 보기 🏁'}</button>
+    </div>
+    <div class="text-center text-xs text-ink-400 mt-2">📒 이 문제는 오답 노트에 저장됐어요. 나중에 다시 풀면 해결!</div>
+  </div></div>`;
+  let shown = 1; const items = $$('#steps .step-item');
+  const reveal = (n) => { shown = Math.min(items.length, n); items.forEach((el, i) => el.classList.toggle('hidden', i >= shown)); $('#stepc').textContent = shown; if (shown >= items.length) { $('#step-next').textContent = '풀이 끝! ✔'; $('#ans-reveal').classList.remove('hidden'); } };
+  if (final) reveal(items.length);
+  $('#step-next').addEventListener('click', () => reveal(shown + 1));
+  $('#step-all').addEventListener('click', () => reveal(items.length));
+  $('#next').addEventListener('click', nextProblem);
+  const r = $('#retry'); if (r) r.addEventListener('click', () => { $('#sheet').innerHTML = ''; $('#answer').value = ''; resetAnswerPad(); });
+}
+function nextProblem() {
+  const S = App.session; S.idx++;
+  if (S.idx >= S.items.length) renderResult(); else renderSolve();
+}
+
+/* =====================================================================
+ * 14. 결과 화면
+ * ===================================================================== */
+function renderResult() {
+  cleanupView(); App.view = 'result'; const S = App.session, u = App.user;
+  const done = S.results.filter(Boolean), ok = done.filter((r) => r.correct).length, pct = done.length ? Math.round((ok / done.length) * 100) : 0;
+  const stars = pct >= 90 ? 3 : pct >= 70 ? 2 : 1, secs = (Date.now() - S.startedAt) / 1000;
+  if (pct >= 80) setTimeout(() => confetti(36), 200);
+  $('#app').innerHTML = `
+  <div class="max-w-3xl mx-auto px-3 sm:px-5 pt-8 fade-in">
+    <div class="card p-6 sm:p-8 text-center bg-gradient-to-br from-white to-lav-50">
+      <div class="text-5xl tracking-widest pop-in">${'⭐'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>
+      <h2 class="font-jua text-3xl text-ink-700 mt-3">${pct >= 90 ? '완벽에 가까워요!' : pct >= 70 ? '잘했어요! 조금만 더!' : '끝까지 해낸 게 대단해요!'}</h2>
+      <div class="text-ink-500 mt-1">${esc(S.title)}</div>
+      <div class="grid grid-cols-3 gap-3 mt-6">
+        <div class="rounded-2xl bg-mint-50 p-4"><div class="font-jua text-3xl text-mint-600">${ok}/${done.length}</div><div class="text-xs text-ink-400">맞은 문제</div></div>
+        <div class="rounded-2xl bg-sky-50 p-4"><div class="font-jua text-3xl text-sky-500">${pct}%</div><div class="text-xs text-ink-400">정답률</div></div>
+        <div class="rounded-2xl bg-peach-50 p-4"><div class="font-jua text-3xl text-peach-500">${fmtTime(secs)}</div><div class="text-xs text-ink-400">걸린 시간</div></div>
+      </div>
+      <div class="mt-4 text-sm text-ink-500">🔥 연속 학습 <b>${streakOf(u)}일</b> · 오늘 <b>${dayStat(u).s}</b>/${u.settings.dailyGoal}문제</div>
+    </div>
+    <div class="card p-4 sm:p-5 mt-4"><div class="font-jua text-lg text-ink-700 mb-2">문제별 결과</div>
+      <div class="space-y-2">${S.items.map((it, i) => { const r = S.results[i]; if (!r) return ''; return `<div class="flex items-center gap-3 rounded-2xl ${r.correct ? 'bg-mint-50' : 'bg-rose-50'} px-3 py-2">
+        <span class="font-jua text-xl ${r.correct ? 'text-mint-500' : 'text-rose-400'}">${r.correct ? 'O' : 'X'}</span>
+        <div class="flex-1 min-w-0 overflow-x-auto scroll-thin text-sm">${it.prob.prompt !== '계산해 보세요.' ? `<span class="text-ink-500 mr-2">${md(it.prob.prompt)}</span>` : ''}${it.prob.expr ? tx('\\displaystyle ' + it.prob.expr) : ''}</div>
+        <div class="text-xs text-ink-400 shrink-0">${r.correct ? '' : `내 답 ${esc(r.user)} → `}${tx('\\displaystyle ' + ansTex(it.prob))}</div></div>`; }).join('')}</div>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4">
+      <button id="r-home" class="btn btn-3d py-4 rounded-2xl bg-white text-ink-600 font-jua text-lg">🏠 홈으로</button>
+      <button id="r-notes" class="btn btn-3d py-4 rounded-2xl bg-rose-100 text-rose-500 font-jua text-lg">📒 오답 노트</button>
+      <button id="r-again" class="btn btn-3d py-4 rounded-2xl bg-lav-400 text-white font-jua text-lg">한 번 더 ▶</button>
+    </div>
+  </div>`;
+  $('#r-home').addEventListener('click', renderHome);
+  $('#r-notes').addEventListener('click', () => renderNotes());
+  $('#r-again').addEventListener('click', () => {
+    if (S.mode === 'daily') return startDaily();
+    if (S.mode === 'review') return renderNotes();
+    const it = S.items[0], un = unitById(it.unitId); startSession(makeItems(un, unitLevel(u, un.id), S.items.length), 'custom', un.name);
+  });
+}
+
+/* =====================================================================
+ * 15. 오답 노트
+ * ===================================================================== */
+function renderNotes(filter = 'open') {
+  cleanupView(); App.view = 'notes'; const u = App.user;
+  const list = u.wrong.filter((w) => (filter === 'open' ? !w.resolved : filter === 'done' ? w.resolved : true));
+  const cnt = { open: u.wrong.filter((w) => !w.resolved).length, done: u.wrong.filter((w) => w.resolved).length, all: u.wrong.length };
+  $('#app').innerHTML = `
+  <div class="max-w-4xl mx-auto px-3 sm:px-5 pt-4 fade-in">
+    <div class="flex items-center gap-3 mb-4"><button id="back" class="btn w-11 h-11 rounded-2xl bg-white shadow-soft text-xl">←</button><h2 class="font-jua text-2xl text-ink-700 flex-1">📒 오답 노트</h2>
+      ${cnt.open ? `<button id="retry-all" class="btn btn-3d px-4 py-2.5 rounded-2xl bg-rose-300 hover:bg-rose-400 text-white font-jua">미해결 다시 풀기 (${Math.min(cnt.open, 20)})</button>` : ''}</div>
+    <div class="flex gap-2 mb-4">${[['open', '미해결'], ['done', '해결 🏅'], ['all', '전체']].map(([k, n]) => `<button data-f="${k}" class="btn ftab px-4 py-2 rounded-xl font-jua ${filter === k ? 'bg-lav-400 text-white' : 'bg-white text-ink-500'}">${n} ${cnt[k]}</button>`).join('')}</div>
+    ${list.length ? '' : `<div class="card p-10 text-center text-ink-400"><div class="text-5xl mb-3">${filter === 'open' ? '🎊' : '📭'}</div>${filter === 'open' ? '해결하지 않은 오답이 없어요! 최고예요!' : '아직 기록이 없어요.'}</div>`}
+    <div class="space-y-3">${list.map((w) => { const un = unitById(w.unitId); const dt = new Date(w.at);
+      return `<div class="card p-4 sm:p-5 ${w.resolved ? 'opacity-80' : ''}">
+        <div class="flex flex-wrap items-center gap-2 text-xs"><span class="px-2 py-0.5 rounded-full bg-lav-100 text-lav-600">${GRADE_NAMES[w.g]}</span><span class="px-2 py-0.5 rounded-full bg-sky-100 text-sky-500">${un ? un.name : ''}</span>${levelBadge(w.d)}
+          <span class="text-ink-400">${dt.getMonth() + 1}/${dt.getDate()} · 시도 ${w.tries || 1}회</span>${w.resolved ? '<span class="ml-auto px-2 py-0.5 rounded-full bg-butter-200 text-[#8A6A00]">🏅 해결</span>' : ''}</div>
+        <div class="text-ink-700 mt-2">${md(w.prob.prompt)}</div>
+        ${w.prob.expr ? `<div class="overflow-x-auto scroll-thin py-2 text-lg">${tx(w.prob.expr, true)}</div>` : ''}
+        <div class="text-sm text-ink-500">내가 쓴 답: <b class="text-rose-400">${esc(w.user)}</b></div>
+        <div class="flex gap-2 mt-3"><button data-id="${w.id}" class="btn note-sol px-4 py-2 rounded-xl bg-lav-50 text-lav-600 text-sm">🪜 풀이·정답 보기</button>
+          <button data-id="${w.id}" class="btn note-retry px-4 py-2 rounded-xl bg-sky-100 text-sky-500 text-sm">✏️ 다시 풀기</button>
+          <button data-id="${w.id}" class="btn note-sim px-4 py-2 rounded-xl bg-mint-50 text-mint-600 text-sm">🔁 비슷한 문제</button></div>
+        <div id="sol-${w.id}" class="hidden mt-3"></div></div>`; }).join('')}</div>
+  </div>`;
+  $('#back').addEventListener('click', renderHome);
+  $$('.ftab').forEach((b) => b.addEventListener('click', () => renderNotes(b.dataset.f)));
+  const find = (id) => u.wrong.find((w) => w.id === id);
+  const asItem = (w) => ({ unitId: w.unitId, g: w.g, d: w.d, prob: w.prob, noteId: w.id, review: true });
+  $$('.note-sol').forEach((b) => b.addEventListener('click', () => { const w = find(b.dataset.id), box = $('#sol-' + w.id); box.classList.toggle('hidden');
+    box.innerHTML = `${w.prob.hint ? `<div class="hint rounded-2xl bg-butter-50 border border-butter-200 p-3 mb-2 text-ink-700">💡 ${md(w.prob.hint)}</div>` : ''}${stepsHTML(w.prob, true)}<div class="mt-2 rounded-2xl bg-mint-50 p-3 text-center">정답: <b class="font-jua text-mint-600 text-lg">${tx(ansTex(w.prob))}</b></div>`; }));
+  $$('.note-retry').forEach((b) => b.addEventListener('click', () => { const w = find(b.dataset.id); startSession([asItem(w)], 'review', '오답 다시 풀기'); }));
+  $$('.note-sim').forEach((b) => b.addEventListener('click', () => { const w = find(b.dataset.id), un = unitById(w.unitId); if (un) startSession(makeItems(un, w.d, 5), 'custom', `${un.name} · 비슷한 문제`); }));
+  const ra = $('#retry-all'); if (ra) ra.addEventListener('click', () => startSession(shuffle(u.wrong.filter((w) => !w.resolved)).slice(0, 20).map(asItem), 'review', '오답 복습'));
+}
+
+/* =====================================================================
+ * 16. 개인 링크 · 설정 · 클라우드 · 글씨 학습
+ * ===================================================================== */
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+function showLinkModal(isNew) {
+  const u = App.user, link = personalLink(u.id);
+  modal(`<div class="text-center">
+    <div class="text-5xl">${esc(u.avatar)}</div>
+    <h3 class="font-jua text-2xl text-ink-700 mt-2">${isNew ? `${esc(u.name)}의 공간이 생겼어요!` : `${esc(u.name)}의 개인 링크`}</h3>
+    <p class="text-sm text-ink-500 mt-1">이 링크(또는 QR)로 들어오면 바로 내 학습 공간이 열려요. 즐겨찾기나 홈 화면에 추가해 두세요!</p>
+    <div id="qr" class="mx-auto mt-4 w-44 h-44 rounded-2xl bg-lav-50 flex items-center justify-center text-ink-400 text-xs">QR 준비 중…</div>
+    <div class="flex items-center gap-2 mt-4"><input readonly value="${esc(link)}" id="linkv" class="flex-1 min-w-0 text-sm px-3 py-2.5 rounded-xl bg-lav-50 border border-lav-100" /><button id="copy" class="btn px-4 py-2.5 rounded-xl bg-lav-400 text-white font-jua">복사</button></div>
+    <p class="text-xs text-ink-400 mt-3 text-left leading-relaxed">${DB.cloud ? '☁️ 클라우드 동기화가 켜져 있어서 다른 기기에서도 같은 기록이 이어져요.' : '💾 지금은 이 기기의 브라우저(LocalStorage)에 저장돼요. 여러 기기에서 같은 기록을 쓰려면 설정 → 클라우드 동기화(Supabase)를 켜 주세요.'}</p>
+    <button id="ok" class="btn btn-3d w-full mt-4 py-3 rounded-2xl bg-mint-400 text-white font-jua text-lg">확인</button></div>`, {
+    onMount: () => {
+      $('#ok').addEventListener('click', closeModal);
+      $('#copy').addEventListener('click', async () => { try { await navigator.clipboard.writeText(link); toast('링크를 복사했어요 📋'); } catch { $('#linkv').select(); document.execCommand('copy'); toast('링크를 복사했어요 📋'); } });
+      (window.qrcode ? Promise.resolve() : loadScript('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js')).then(() => {
+        const q = window.qrcode(0, 'M'); q.addData(link); q.make(); const el = $('#qr'); if (el) el.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+        const svg = el && el.querySelector('svg'); if (svg) { svg.setAttribute('width', '100%'); svg.setAttribute('height', '100%'); }
+      }).catch(() => { const el = $('#qr'); if (el) el.textContent = 'QR을 불러오지 못했어요 (오프라인)'; });
+    },
+  });
+}
+function openSettings() {
+  const u = App.user, s = u.settings, hwN = Object.values(u.hw).reduce((a, b) => a + b.length, 0);
+  const seg = (name, vals, cur) => `<div class="flex gap-2 flex-wrap">${vals.map((v) => `<button data-set="${name}" data-v="${v}" class="btn setopt px-4 py-2 rounded-xl font-jua ${v === cur ? 'bg-lav-400 text-white' : 'bg-lav-50 text-ink-600'}">${v}</button>`).join('')}</div>`;
+  const tog = (name, label, desc) => `<label class="flex items-center gap-3 py-2 cursor-pointer"><input type="checkbox" data-tog="${name}" ${s[name] ? 'checked' : ''} class="w-6 h-6 accent-[#8C74E0]" /><div><div class="text-ink-700">${label}</div><div class="text-xs text-ink-400">${desc}</div></div></label>`;
+  modal(`<h3 class="font-jua text-2xl text-ink-700 mb-4">⚙️ 설정</h3>
+    <div class="space-y-5">
+      <div><div class="text-sm text-ink-500 mb-2">학년</div><select id="set-grade" class="w-full px-4 py-3 rounded-2xl bg-lav-50 border border-lav-100 font-jua">${GRADE_LONG.slice(1).map((g, i) => `<option value="${i + 1}" ${u.grade === i + 1 ? 'selected' : ''}>${g}</option>`).join('')}</select></div>
+      <div><div class="text-sm text-ink-500 mb-2">하루 목표 문제 수</div>${seg('dailyGoal', [10, 20, 30, 50], s.dailyGoal)}</div>
+      <div><div class="text-sm text-ink-500 mb-2">한 번에 푸는 문제 수 (오늘의 연산)</div>${seg('sessionSize', [5, 10, 15, 20], s.sessionSize)}</div>
+      <div class="rounded-2xl bg-lav-50/60 p-3">
+        ${tog('autoRecognize', '펜을 떼면 자동 인식', '답을 쓰고 잠시 멈추면 자동으로 숫자로 바꿔요')}
+        ${tog('penOnly', '펜 전용 모드 (손바닥 무시)', '스타일러스를 쓰면 손가락·손바닥 터치를 무시해요')}
+      </div>
+      <div class="rounded-2xl bg-butter-50 p-3 text-sm text-ink-600 flex items-center gap-2">✍️ 학습된 내 글씨 샘플 <b>${hwN}</b>개 <button id="hw-reset" class="ml-auto px-3 py-1.5 rounded-xl bg-white text-rose-400">초기화</button></div>
+      <div class="rounded-2xl border border-lav-100 p-3"><div class="text-sm text-ink-500 mb-2">📦 기록 백업 / 복원 (JSON)</div>
+        <div class="flex gap-2"><button id="exp" class="btn flex-1 py-2.5 rounded-xl bg-sky-100 text-sky-500 font-jua">내보내기</button><label class="btn flex-1 py-2.5 rounded-xl bg-mint-100 text-mint-600 font-jua text-center cursor-pointer">가져오기<input id="imp" type="file" accept="application/json" class="hidden" /></label></div></div>
+      <button id="cloud" class="btn w-full py-3 rounded-2xl bg-lav-50 text-lav-600 font-jua">☁️ 클라우드 동기화 (Supabase) ${DB.cloud ? '— 켜짐' : '— 꺼짐'}</button>
+      <button id="del" class="w-full text-sm text-rose-400 underline">이 기기에서 ${esc(u.name)} 프로필 삭제</button>
+    </div>
+    <button id="close" class="btn btn-3d w-full mt-5 py-3 rounded-2xl bg-lav-400 text-white font-jua text-lg">저장하고 닫기</button>`, {
+    onMount: () => {
+      $$('.setopt').forEach((b) => b.addEventListener('click', () => { s[b.dataset.set] = +b.dataset.v; $$(`.setopt[data-set="${b.dataset.set}"]`).forEach((x) => { const on = x === b; x.className = `btn setopt px-4 py-2 rounded-xl font-jua ${on ? 'bg-lav-400 text-white' : 'bg-lav-50 text-ink-600'}`; }); }));
+      $$('[data-tog]').forEach((c) => c.addEventListener('change', () => { s[c.dataset.tog] = c.checked; }));
+      $('#hw-reset').addEventListener('click', () => { if (confirm('학습된 글씨 샘플을 모두 지울까요?')) { u.hw = {}; save(); toast('초기화했어요'); closeModal(); } });
+      $('#exp').addEventListener('click', () => { const blob = new Blob([JSON.stringify(u, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `smartmath-${u.id}-${today()}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); });
+      $('#imp').addEventListener('change', async (e) => { try { const d = JSON.parse(await e.target.files[0].text()); if (!d.id || !d.days) throw 0; d.id = u.id; App.user = migrateUser(d); save(); closeModal(); renderHome(); toast('기록을 가져왔어요 ✅'); } catch { toast('올바른 백업 파일이 아니에요'); } });
+      $('#cloud').addEventListener('click', openCloudSettings);
+      $('#del').addEventListener('click', () => { if (confirm(`${u.name}의 기록을 이 기기에서 삭제할까요? (되돌릴 수 없어요)`)) { LocalStore.remove(u.id); closeModal(); renderLogin(); } });
+      $('#close').addEventListener('click', () => { u.grade = +$('#set-grade').value; save(); closeModal(); if (App.view === 'home') renderHome(); });
+    },
+  });
+}
+function openCloudSettings() {
+  const c = LS.get('sm:cloud', {}) || {};
+  modal(`<h3 class="font-jua text-2xl text-ink-700">☁️ 클라우드 동기화</h3>
+    <p class="text-sm text-ink-500 mt-1 leading-relaxed">무료 <b>Supabase</b> 프로젝트를 연결하면 <code>?user=</code> 개인 링크로 어느 기기에서나 같은 기록을 이어서 쓸 수 있어요. (테이블 생성 SQL은 이 파일 소스의 <b>저장소</b> 섹션 주석 참고)</p>
+    <label class="block text-sm text-ink-500 mt-4 mb-1">Project URL</label><input id="c-url" value="${esc(c.url || '')}" placeholder="https://xxxx.supabase.co" class="w-full px-4 py-3 rounded-2xl bg-lav-50 border border-lav-100" />
+    <label class="block text-sm text-ink-500 mt-3 mb-1">anon public key</label><input id="c-key" value="${esc(c.key || '')}" placeholder="eyJhbGciOi..." class="w-full px-4 py-3 rounded-2xl bg-lav-50 border border-lav-100" />
+    <div id="c-msg" class="text-sm mt-2 text-ink-400"></div>
+    <div class="flex gap-2 mt-4"><button id="c-off" class="btn flex-1 py-3 rounded-2xl bg-white border border-lav-100 text-ink-500 font-jua">끄기</button><button id="c-save" class="btn btn-3d flex-[2] py-3 rounded-2xl bg-lav-400 text-white font-jua">연결 테스트 후 저장</button></div>`, {
+    onMount: () => {
+      $('#c-off').addEventListener('click', () => { LS.del('sm:cloud'); DB.init(); closeModal(); toast('이 기기 저장소만 사용해요 💾'); });
+      $('#c-save').addEventListener('click', async () => {
+        const url = $('#c-url').value.trim(), key = $('#c-key').value.trim(); if (!url || !key) return ($('#c-msg').textContent = 'URL과 key를 모두 입력해 주세요.');
+        $('#c-msg').textContent = '연결 확인 중…';
+        try { await new SupabaseStore(url, key).ping(); LS.set('sm:cloud', { url, key }); DB.init(); if (App.user) DB.saveUser(App.user); closeModal(); toast('클라우드 연결 완료! ☁️'); }
+        catch (e) { $('#c-msg').innerHTML = `<span class="text-rose-400">연결 실패 (${esc(e.message)}). URL/key와 sm_profiles 테이블·정책을 확인해 주세요.</span>`; }
+      });
+    },
+  });
+}
+function openTrainer() {
+  const u = App.user, seq = shuffle('0123456789'.split('')).concat(shuffle('0123456789/'.split(''))); let i = 0, pad = null;
+  modal(`<h3 class="font-jua text-2xl text-ink-700">✍️ 내 글씨 익히기</h3>
+    <p class="text-sm text-ink-500 mt-1">화면에 나온 글자를 평소처럼 써 주세요. 내 글씨체를 기억해서 답안 인식이 더 정확해져요.</p>
+    <div class="flex items-center justify-between mt-4"><div class="text-ink-500 text-sm"><span id="t-i">1</span> / ${seq.length}</div><div class="font-jua text-ink-700">이 글자를 써 주세요 → <span id="t-ch" class="text-4xl text-lav-600 align-middle ml-1"></span></div></div>
+    <div class="answer-paper rounded-2xl border-2 border-dashed border-lav-200 h-[200px] mt-2 overflow-hidden"><canvas id="t-pad" class="ink-canvas"></canvas></div>
+    <div id="t-guess" class="text-sm text-ink-400 mt-2 h-5"></div>
+    <div class="flex gap-2 mt-3"><button id="t-clear" class="btn flex-1 py-3 rounded-2xl bg-lav-50 text-ink-500 font-jua">다시 쓰기</button><button id="t-ok" class="btn btn-3d flex-[2] py-3 rounded-2xl bg-lav-400 text-white font-jua text-lg">저장하고 다음 →</button></div>
+    <button id="t-end" class="w-full mt-3 text-sm text-ink-400 underline">그만하기</button>`, {
+    onMount: () => {
+      HW.init();
+      const show = () => { $('#t-i').textContent = i + 1; $('#t-ch').textContent = seq[i]; $('#t-guess').textContent = ''; pad && pad.clear(); };
+      requestAnimationFrame(() => { pad = new InkPad($('#t-pad'), { width: 4.2, onEnd: () => { const r = HW.recognize(pad.inkStrokes(), pad.h, u.hw); $('#t-guess').textContent = `지금 인식 결과: ${r.text || '-'}`; } }); show(); });
+      $('#t-clear').addEventListener('click', () => pad.clear());
+      $('#t-end').addEventListener('click', () => { save(); closeModal(); if (App.view === 'home') renderHome(); });
+      $('#t-ok').addEventListener('click', () => {
+        if (!pad.strokes.length) return toast('글자를 써 주세요 ✏️');
+        HW.addSample(u, pad.inkStrokes(), seq[i]); i++;
+        if (i >= seq.length) { save(); closeModal(); confetti(20); toast('내 글씨 학습 완료! 이제 더 잘 알아봐요 ✨'); if (App.view === 'home') renderHome(); } else show();
+      });
+    },
+  });
+}
+
+/* =====================================================================
+ * 17. 시작
+ * ===================================================================== */
+window.addEventListener('resize', () => { clearTimeout(window.__rz); window.__rz = setTimeout(() => App.pads.forEach((p) => p.resize()), 150); });
+async function boot() {
+  DB.init();
+  const id = new URLSearchParams(location.search).get('user');
+  if (id) { const u = await DB.loadUser(id); if (u) return login(u); return renderLogin({ prefill: id }); }
+  renderLogin();
+}
+boot();
+</script>
+</body>
+</html>
