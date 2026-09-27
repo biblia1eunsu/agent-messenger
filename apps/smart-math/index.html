@@ -1561,7 +1561,14 @@ function setUrlUser(id) {
   if (!canUseUrl()) return;
   try { const u = new URL(location.href); if (id) u.searchParams.set('user', id); else u.searchParams.delete('user'); history.replaceState(null, '', u); } catch { /* 주소 변경 불가 환경 */ }
 }
-const personalLink = (id) => { if (!canUseUrl()) return `index.html?user=${encodeURIComponent(id)}`; const u = new URL(location.href); u.search = ''; u.hash = ''; u.searchParams.set('user', id); return u.toString(); };
+// 해시 링크(#u-16진수)는 쿼리 문자열이 전달되지 않는 호스팅(예: claude.ai 아티팩트)에서도 동작합니다.
+const idToHash = (id) => 'u-' + Array.from(new TextEncoder().encode(id), (b) => b.toString(16).padStart(2, '0')).join('');
+const hashToId = (h) => { const m = /^#?u-([0-9a-f]+)$/i.exec(h || ''); if (!m || m[1].length % 2) return null; try { return new TextDecoder().decode(new Uint8Array(m[1].match(/../g).map((x) => parseInt(x, 16)))); } catch { return null; } };
+const personalLink = (id) => {
+  if (window.SM_PUBLIC_URL) return `${window.SM_PUBLIC_URL.split('#')[0]}#${idToHash(id)}`;
+  if (!canUseUrl()) return `index.html?user=${encodeURIComponent(id)}`;
+  const u = new URL(location.href); u.search = ''; u.hash = ''; u.searchParams.set('user', id); return u.toString();
+};
 /** 브라우저 confirm() 대신 쓰는 확인 창 (샌드박스에서는 confirm 이 막혀 항상 false 가 됨) */
 function askConfirm(msg, onYes, yesLabel = '네') {
   modal(`<div class="text-center"><div class="text-4xl mb-2">🤔</div><div class="text-lg text-ink-700 leading-relaxed">${esc(msg)}</div>
@@ -2088,7 +2095,7 @@ function showLinkModal(isNew) {
     <p class="text-sm text-ink-500 mt-1">이 링크(또는 QR)로 들어오면 바로 내 학습 공간이 열려요. 즐겨찾기나 홈 화면에 추가해 두세요!</p>
     <div id="qr" class="mx-auto mt-4 w-44 h-44 rounded-2xl bg-lav-50 flex items-center justify-center text-ink-400 text-xs">QR 준비 중…</div>
     <div class="flex items-center gap-2 mt-4"><input readonly value="${esc(link)}" id="linkv" class="flex-1 min-w-0 text-sm px-3 py-2.5 rounded-xl bg-lav-50 border border-lav-100" /><button id="copy" class="btn px-4 py-2.5 rounded-xl bg-lav-400 text-white font-jua">복사</button></div>
-    ${canUseUrl() ? '' : '<p class="text-xs text-rose-400 mt-3 text-left leading-relaxed">⚠️ 지금은 미리보기 창이라 링크를 바로 쓸 수 없어요. index.html 파일을 크롬·사파리 등 브라우저로 직접 열거나 웹에 올리면 개인 링크가 동작해요.</p>'}
+    ${canUseUrl() || window.SM_PUBLIC_URL ? '' : '<p class="text-xs text-rose-400 mt-3 text-left leading-relaxed">⚠️ 지금은 미리보기 창이라 링크를 바로 쓸 수 없어요. index.html 파일을 크롬·사파리 등 브라우저로 직접 열거나 웹에 올리면 개인 링크가 동작해요.</p>'}
     <p class="text-xs text-ink-400 mt-3 text-left leading-relaxed">${DB.cloud ? '☁️ 클라우드 동기화가 켜져 있어서 다른 기기에서도 같은 기록이 이어져요.' : '💾 지금은 이 기기의 브라우저(LocalStorage)에 저장돼요. 여러 기기에서 같은 기록을 쓰려면 설정 → 클라우드 동기화(Supabase)를 켜 주세요.'}</p>
     <button id="ok" class="btn btn-3d w-full mt-4 py-3 rounded-2xl bg-mint-400 text-white font-jua text-lg">확인</button></div>`, {
     onMount: () => {
@@ -2116,7 +2123,8 @@ function openSettings() {
       </div>
       <div class="rounded-2xl bg-butter-50 p-3 text-sm text-ink-600 flex items-center gap-2">✍️ 학습된 내 글씨 샘플 <b>${hwN}</b>개 <button id="hw-reset" class="ml-auto px-3 py-1.5 rounded-xl bg-white text-rose-400">초기화</button></div>
       <div class="rounded-2xl border border-lav-100 p-3"><div class="text-sm text-ink-500 mb-2">📦 기록 백업 / 복원 (JSON)</div>
-        <div class="flex gap-2"><button id="exp" class="btn flex-1 py-2.5 rounded-xl bg-sky-100 text-sky-500 font-jua">내보내기</button><label class="btn flex-1 py-2.5 rounded-xl bg-mint-100 text-mint-600 font-jua text-center cursor-pointer">가져오기<input id="imp" type="file" accept="application/json" class="hidden" /></label></div></div>
+        <div class="flex gap-2"><button id="exp" class="btn flex-1 py-2.5 rounded-xl bg-sky-100 text-sky-500 font-jua">내보내기(복사)</button><label class="btn flex-1 py-2.5 rounded-xl bg-mint-100 text-mint-600 font-jua text-center cursor-pointer">파일 가져오기<input id="imp" type="file" accept="application/json" class="hidden" /></label></div>
+        <textarea id="imp-text" rows="2" class="w-full mt-2 text-xs px-3 py-2 rounded-xl bg-lav-50 border border-lav-100" placeholder="또는 복사해 둔 기록(JSON)을 여기에 붙여 넣으세요"></textarea></div>
       <button id="cloud" class="btn w-full py-3 rounded-2xl bg-lav-50 text-lav-600 font-jua">☁️ 클라우드 동기화 (Supabase) ${DB.cloud ? '— 켜짐' : '— 꺼짐'}</button>
       <button id="del" class="w-full text-sm text-rose-400 underline">이 기기에서 ${esc(u.name)} 프로필 삭제</button>
     </div>
@@ -2125,8 +2133,14 @@ function openSettings() {
       $$('.setopt').forEach((b) => b.addEventListener('click', () => { s[b.dataset.set] = +b.dataset.v; $$(`.setopt[data-set="${b.dataset.set}"]`).forEach((x) => { const on = x === b; x.className = `btn setopt px-4 py-2 rounded-xl font-jua ${on ? 'bg-lav-400 text-white' : 'bg-lav-50 text-ink-600'}`; }); }));
       $$('[data-tog]').forEach((c) => c.addEventListener('change', () => { s[c.dataset.tog] = c.checked; }));
       $('#hw-reset').addEventListener('click', () => askConfirm('학습된 글씨 샘플을 모두 지울까요?', () => { u.hw = {}; save(); toast('초기화했어요'); }, '지우기'));
-      $('#exp').addEventListener('click', () => { const blob = new Blob([JSON.stringify(u, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `smartmath-${u.id}-${today()}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); });
-      $('#imp').addEventListener('change', async (e) => { try { const d = JSON.parse(await e.target.files[0].text()); if (!d.id || !d.days) throw 0; d.id = u.id; App.user = migrateUser(d); save(); closeModal(); renderHome(); toast('기록을 가져왔어요 ✅'); } catch { toast('올바른 백업 파일이 아니에요'); } });
+      $('#exp').addEventListener('click', async () => {
+        const json = JSON.stringify(u);
+        try { await navigator.clipboard.writeText(json); toast('기록(JSON)을 클립보드에 복사했어요 📋 메모장 등에 붙여 넣어 보관하세요.'); } catch { toast('복사하지 못했어요. 브라우저에서 직접 열어 다시 시도해 주세요.'); }
+        try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(u, null, 2)], { type: 'application/json' })); a.download = `smartmath-${u.id}-${today()}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); } catch { /* 다운로드가 막힌 환경 */ }
+      });
+      const importJson = (t) => { try { const d = JSON.parse(t); if (!d.id || !d.days) throw 0; d.id = u.id; App.user = migrateUser(d); save(); closeModal(); renderHome(); toast('기록을 가져왔어요 ✅'); } catch { toast('올바른 백업 기록이 아니에요'); } };
+      $('#imp').addEventListener('change', async (e) => importJson(await e.target.files[0].text()));
+      $('#imp-text').addEventListener('paste', (e) => { const t = e.clipboardData && e.clipboardData.getData('text'); if (t) { e.preventDefault(); importJson(t); } });
       $('#cloud').addEventListener('click', openCloudSettings);
       $('#del').addEventListener('click', () => askConfirm(`${u.name}의 기록을 이 기기에서 삭제할까요? (되돌릴 수 없어요)`, () => { LocalStore.remove(u.id); renderLogin(); }, '삭제'));
       $('#close').addEventListener('click', () => { u.grade = +$('#set-grade').value; save(); closeModal(); if (App.view === 'home') renderHome(); });
@@ -2182,10 +2196,12 @@ function openTrainer() {
 window.addEventListener('resize', () => { clearTimeout(window.__rz); window.__rz = setTimeout(() => App.pads.forEach((p) => p.resize()), 150); });
 async function boot() {
   DB.init();
-  const id = new URLSearchParams(location.search).get('user');
+  let id = null;
+  try { id = new URLSearchParams(location.search).get('user') || hashToId(location.hash); } catch { /* ignore */ }
   if (id) { const u = await DB.loadUser(id); if (u) return login(u); return renderLogin({ prefill: id }); }
   renderLogin();
 }
+window.addEventListener('hashchange', () => { const id = hashToId(location.hash); if (id && (!App.user || App.user.id !== id)) boot(); });
 boot();
 </script>
 </body>
