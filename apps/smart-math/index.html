@@ -255,7 +255,7 @@ function mk(o) {
 
 const GRADE_NAMES = ['', '초1', '초2', '초3', '초4', '초5', '초6', '중1', '중2', '중3', '고1', '고2', '고3'];
 const GRADE_LONG = ['', '초등 1학년', '초등 2학년', '초등 3학년', '초등 4학년', '초등 5학년', '초등 6학년', '중학 1학년', '중학 2학년', '중학 3학년', '고등 1학년', '고등 2학년', '고등 3학년'];
-const LEVELS = ['하', '중', '상'];
+const LEVELS = ['하', '중', '상', '최상'];
 const UNITS = []; // {id, g, name, desc, gen}
 const U = (g, id, name, desc, gen) => UNITS.push({ g, id, name, desc, gen });
 const unitById = (id) => UNITS.find((u) => u.id === id);
@@ -1101,6 +1101,326 @@ U(12, 'h3-stat', '중복순열·중복조합·확률분포', 'nΠr, nHr, 이항�
   return mk({ prompt: `확률변수 $X$가 이항분포 $B\\left(${n}, ${p.tex()}\\right)$를 따를 때, $V(${a}X+${b})$는?`, ans: V.mul(a * a), hint: 'V(aX + b) = a²V(X). 상수 b는 분산에 영향이 없어요.',
     steps: [`$V(X)=np(1-p)=${V.tex()}$`, `$V(${a}X+${b})=${a}^2\\times${V.tex()}=${V.mul(a * a).tex()}$`], traps: [[V.mul(a), '분산은 a가 아니라 a²배예요.'], [V.mul(a * a).add(b), '분산에서 상수 b는 더하지 않아요.'], [V.mul(a).add(b), 'V(aX+b) = a²V(X) 예요.']] });
 });
+
+/* ---------------------------------------------------------------------
+ * 최상(도전) 단계: 각 단원의 d=3 생성기. 여러 단계를 거치거나 한 단계 위 개념을 섞은 문제
+ * --------------------------------------------------------------------- */
+const HARD = {};
+const HU = (id, fn) => { HARD[id] = fn; };
+const mixTex = (w, n, d) => `${w}\\frac{${n}}{${d}}`;
+const ft2 = (f) => (f.n < 0 ? `\\left(${f.tex()}\\right)` : f.tex()); // 음수 분수는 괄호
+
+HU('e1-add', () => {
+  const a = R(1, 8) * 10 + R(2, 9), b = R(10 - (a % 10), 9);
+  return mk({ expr: `${a}+${b}=\\square`, ans: a + b, hint: '일의 자리끼리 더해 10이 넘으면 십의 자리로 1을 받아올려요.', steps: colAddSteps(a, b),
+    traps: [[noCarryAdd(a, b), '받아올린 1을 십의 자리에 더하지 않았어요.']] });
+});
+HU('e1-sub', () => {
+  if (Math.random() < 0.5) {
+    const x = R(3, 9), b = R(3, 9), c = x + b;
+    return mk({ prompt: '□에 알맞은 수를 구하세요.', expr: `\\square + ${b} = ${c}`, ans: x, hint: '□ + b = c 이면 □ = c − b 예요. 덧셈을 뺄셈으로 바꿔 생각해요.',
+      steps: [`□에 ${b}을(를) 더해서 ${c}이(가) 되었어요.`, `거꾸로 빼요: $□ = ${c} - ${b} = ${x}$`, `확인: $${x} + ${b} = ${c}$ ✓`], traps: [[c + b, '□를 구할 때는 더하지 말고 빼야 해요.']] });
+  }
+  const a = R(11, 18), x = R(a - 9, 9), r = a - x;
+  return mk({ prompt: '□에 알맞은 수를 구하세요.', expr: `${a} - \\square = ${r}`, ans: x, hint: 'a − □ = r 이면 □ = a − r 예요.',
+    steps: [`${a}에서 □만큼 빼서 ${r}이(가) 남았어요.`, `$□ = ${a} - ${r} = ${x}$`, `확인: $${a} - ${x} = ${r}$ ✓`], traps: [[a + r, '□를 구할 때는 빼야 해요.']] });
+});
+HU('e1-2d', () => {
+  const a1 = R(2, 5), a0 = R(0, 4), b1 = R(1, 9 - a1), b0 = R(0, 9 - a0), s1 = a1 + b1, s0 = a0 + b0, c1 = R(1, s1 - 1), c0 = R(0, s0);
+  const a = a1 * 10 + a0, b = b1 * 10 + b0, c = c1 * 10 + c0, t = a + b;
+  return mk({ expr: `${a}+${b}-${c}=\\square`, ans: t - c, hint: '앞에서부터 차례로 계산해요.',
+    steps: [`먼저 더해요: $${a}+${b}=${t}$`, `그다음 빼요: $${t}-${c}=${t - c}$`], traps: [[a - b + c, '더하기와 빼기를 바꿔서 계산했어요.'], [t, `마지막에 ${c}을(를) 빼는 걸 잊었어요.`]] });
+});
+HU('e2-add', () => {
+  const a = R(15, 49), b = R(15, 49), c = R(15, 49), t = a + b;
+  return mk({ prompt: '세 수를 더해 보세요.', expr: `${a}+${b}+${c}=\\square`, ans: t + c, hint: '두 수씩 차례로 더해요. 받아올림을 잊지 마세요!',
+    steps: [`앞의 두 수: $${a}+${b}=${t}$`, `남은 수: $${t}+${c}=${t + c}$`], traps: [[t, `마지막 수 ${c}을(를) 더하지 않았어요.`], [noCarryAdd(t, c), '받아올림을 빠뜨렸어요.']] });
+});
+HU('e2-sub', () => {
+  const a = R(50, 95), b = R(12, a - 15), c = R(11, 40), t = a - b;
+  return mk({ expr: `${a}-${b}+${c}=\\square`, ans: t + c, hint: '덧셈과 뺄셈만 있으면 앞에서부터 차례로 계산해요.',
+    steps: [`먼저 빼요: $${a}-${b}=${t}$`, `그다음 더해요: $${t}+${c}=${t + c}$`], traps: [[a - (b + c), '뒤의 덧셈을 먼저 하면 안 돼요. 앞에서부터 차례로!']] });
+});
+HU('e2-mul', () => {
+  let a, b, c, d; do { a = R(3, 9); b = R(3, 9); c = R(2, 9); d = R(2, 9); } while (a * b <= c * d);
+  return mk({ expr: `${a}\\times${b}-${c}\\times${d}=\\square`, ans: a * b - c * d, hint: '곱셈을 먼저 하고 나중에 빼요.',
+    steps: [`$${a}\\times${b}=${a * b}$`, `$${c}\\times${d}=${c * d}$`, `$${a * b}-${c * d}=${a * b - c * d}$`], traps: [[(a * b - c) * d, '앞에서부터 차례로 계산했어요. 곱셈을 먼저 해야 해요!']] });
+});
+HU('e3-addsub', () => {
+  if (Math.random() < 0.5) {
+    let a, b; do { a = R(1234, 5876); b = R(1567, 3987); } while (noCarryAdd(a, b) === a + b);
+    return mk({ expr: `${a}+${b}=\\square`, ans: a + b, hint: '네 자리 수도 일의 자리부터 차례로! 받아올림을 챙겨요.', steps: colAddSteps(a, b), traps: [[noCarryAdd(a, b), '받아올림을 윗자리에 더하지 않았어요.']] });
+  }
+  const a = R(4, 9) * 1000 + R(0, 1) * 10 + R(0, 5), b = R(1111, a - 1000);
+  return mk({ expr: `${a}-${b}=\\square`, ans: a - b, hint: '0에서는 빌려줄 수 없으니 그 윗자리부터 차례로 빌려와요.', steps: colSubSteps(a, b), traps: [[smallFromLarge(a, b), '각 자리에서 큰 수에서 작은 수를 거꾸로 뺐어요.']] });
+});
+HU('e3-mul', () => {
+  const a = R(12, 49), b = R(12, 39), b0 = b % 10, b1 = Math.floor(b / 10), p1 = a * b0, p2 = a * b1 * 10;
+  return mk({ expr: `${a}\\times${b}=\\square`, ans: a * b, hint: '곱하는 수를 십의 자리와 일의 자리로 나눠 곱한 뒤 더해요.',
+    steps: [`$${a}\\times${b0}=${p1}$`, `$${a}\\times${b1 * 10}=${p2}$`, `$${p1}+${p2}=${a * b}$`], traps: [[p1 + a * b1, '십의 자리 곱은 ×10 (한 칸 왼쪽)이에요.']] });
+});
+HU('e3-div', () => {
+  const b = R(3, 9), q = R(21, Math.floor(990 / b)), r = R(1, b - 1), a = b * q + r;
+  return mk({ prompt: '몫과 나머지를 차례로 쓰세요. (몫, 나머지)', expr: `${a}\\div${b}`, ans: `${q},${r}`, type: 'pair', format: '몫,나머지', hint: '높은 자리부터 나누어 내려와요. 나머지는 나누는 수보다 작아야 해요.',
+    steps: [`$${b}\\times${q}=${b * q}$ (${a}을(를) 넘지 않는 가장 큰 곱)`, `나머지: $${a}-${b * q}=${r}$`, `확인: $${b}\\times${q}+${r}=${a}$ ✓`], traps: [[`${r},${q}`, '몫과 나머지 순서가 바뀌었어요.']] });
+});
+HU('e4-mul', () => {
+  const a = R(123, 899), b = R(102, 789), ds = digits(b), parts = ds.map((x, i) => a * x * 10 ** i);
+  return mk({ expr: `${a}\\times${b}=\\square`, ans: a * b, hint: '곱하는 수의 자리별로 곱하고, 자릿값만큼 0을 붙여 모두 더해요.',
+    steps: [...ds.map((x, i) => `$${a}\\times${x * 10 ** i}=${parts[i]}$`), `모두 더해요: $${parts.join('+')}=${a * b}$`],
+    traps: [[ds.reduce((s, x) => s + a * x, 0), '자릿값을 맞추지 않고 더했어요. 십의 자리는 ×10, 백의 자리는 ×100!']] });
+});
+HU('e4-div', () => {
+  const b = R(13, 49), q = R(41, Math.floor(9999 / b) - 1), r = R(1, b - 1), a = b * q + r;
+  return mk({ prompt: '몫과 나머지를 차례로 쓰세요. (몫, 나머지)', expr: `${a}\\div${b}`, ans: `${q},${r}`, type: 'pair', format: '몫,나머지', hint: '몫을 어림한 뒤 곱셈으로 확인해요. 나머지는 나누는 수보다 작아야 해요.',
+    steps: [`$${b}$를 약 $${Math.round(b / 10) * 10}$으로 어림해 몫을 짐작해요.`, `$${b}\\times${q}=${b * q}$`, `나머지: $${a}-${b * q}=${r}$`, `확인: $${b}\\times${q}+${r}=${a}$ ✓`], traps: [[`${r},${q}`, '몫과 나머지 순서가 바뀌었어요.']] });
+});
+HU('e4-frac', () => {
+  const den = R(5, 12), a = R(1, den - 2), b = R(a + 1, den - 1), w1 = R(3, 6), w2 = R(1, w1 - 1), ans = fr((w1 - w2) * den + a - b, den);
+  return mk({ prompt: '계산해 보세요. (대분수는 띄어서 1 2/5, 가분수도 좋아요)', expr: `${mixTex(w1, a, den)}-${mixTex(w2, b, den)}=\\square`, ans,
+    hint: '분수끼리 뺄 수 없으면 자연수에서 1을 빌려와 분수로 바꿔요.',
+    steps: [`$\\frac{${a}}{${den}}$에서 $\\frac{${b}}{${den}}$를 뺄 수 없어요.`, `자연수에서 1을 빌려와요: $${mixTex(w1, a, den)}=${mixTex(w1 - 1, den + a, den)}$`, `자연수끼리: $${w1 - 1}-${w2}=${w1 - 1 - w2}$, 분수끼리: $\\frac{${den + a}}{${den}}-\\frac{${b}}{${den}}=\\frac{${den + a - b}}{${den}}$`, `답: $${ans.mixedTex()}$`],
+    traps: [[fr((w1 - w2) * den + b - a, den), '분수 부분을 거꾸로(큰 수 − 작은 수) 뺐어요. 자연수에서 1을 빌려와야 해요.']] });
+});
+HU('e4-dec', () => {
+  const X = R(500, 1999), Y = R(101, X - 100), Z = R(1, 99);
+  const res = X - Y + Z * 10;
+  return mk({ expr: `${dec(X, 2)}-${dec(Y, 2)}+${dec(Z, 1)}=\\square`, ans: dec(res, 2), hint: '소수점을 맞추고, 앞에서부터 차례로 계산해요.',
+    steps: [`$${dec(X, 2)}-${dec(Y, 2)}=${dec(X - Y, 2)}$`, `$${dec(X - Y, 2)}+${dec(Z, 1)}=${dec(res, 2)}$ (소수점 자리를 맞춰서)`], traps: [[dec(X - Y + Z, 2), `${dec(Z, 1)}의 소수점 자리를 맞추지 않았어요.`]] });
+});
+HU('e5-gcd', () => {
+  const set = pick([[4, 6, 10], [6, 8, 12], [12, 18, 30], [8, 12, 20], [9, 12, 15], [10, 15, 25], [6, 10, 15], [14, 21, 28], [16, 24, 40], [18, 24, 36], [12, 16, 20]]);
+  const G = gcd(gcd(set[0], set[1]), set[2]), L = lcm(lcm(set[0], set[1]), set[2]), wantL = Math.random() < 0.6;
+  return mk({ prompt: `세 수의 ${wantL ? '최소공배수' : '최대공약수'}를 구하세요.`, expr: set.join(',\\ '), ans: wantL ? L : G, hint: '세 수를 소인수분해해서 비교해요.',
+    steps: [...set.map((x) => `$${x}=${pfTex(x)}$`), wantL ? `각 소인수의 가장 큰 거듭제곱을 모두 곱해요: $${pfTex(L)}=${L}$` : `세 수에 모두 들어 있는 소인수만 곱해요: $${G}$`],
+    traps: wantL ? [[set[0] * set[1] * set[2], '세 수를 모두 곱하면 공배수이지만 가장 작은 공배수는 아니에요.'], [G, '이건 최대공약수예요.']] : [[L, '이건 최소공배수예요.']] });
+});
+HU('e5-fracdiff', () => {
+  let p, q, r, a, b, c, ans;
+  do { p = R(2, 6); q = R(2, 8); r = R(3, 9); a = coNum(p, 1, p - 1); b = coNum(q, 1, q - 1); c = coNum(r, 1, r - 1); ans = fr(a, p).add(fr(b, q)).sub(fr(c, r)); } while (ans.n <= 0 || new Set([p, q, r]).size < 3);
+  const L = lcm(lcm(p, q), r);
+  return mk({ expr: `\\frac{${a}}{${p}}+\\frac{${b}}{${q}}-\\frac{${c}}{${r}}=\\square`, ans, hint: '세 분모의 최소공배수로 한 번에 통분해요.',
+    steps: [`$${p}, ${q}, ${r}$의 최소공배수: $${L}$`, `$\\frac{${a * (L / p)}}{${L}}+\\frac{${b * (L / q)}}{${L}}-\\frac{${c * (L / r)}}{${L}}$`, `$=\\frac{${a * (L / p) + b * (L / q) - c * (L / r)}}{${L}}${ans.d === L ? '' : `=${ans.tex()}`}$`] });
+});
+HU('e5-fracmul', () => {
+  const b = R(2, 6), a = coNum(b, 1, b - 1), d = R(2, 6), c = coNum(d, 1, d - 1), w1 = R(1, 3), w2 = R(1, 3);
+  const A = fr(w1 * b + a, b), B = fr(w2 * d + c, d), ans = A.mul(B);
+  return mk({ prompt: '계산해 보세요. (대분수는 띄어서 2 1/3, 가분수도 좋아요)', expr: `${mixTex(w1, a, b)}\\times${mixTex(w2, c, d)}=\\square`, ans, hint: '대분수는 먼저 가분수로 바꾼 다음 곱해요.',
+    steps: [`가분수로: $${mixTex(w1, a, b)}=${A.tex()}$, $${mixTex(w2, c, d)}=${B.tex()}$`, `$${A.tex()}\\times${B.tex()}=${ans.tex()}$`, `대분수로: $${ans.mixedTex()}$`],
+    traps: [[fr(w1 * w2).add(fr(a * c, b * d)), '자연수끼리, 분수끼리 따로 곱하면 안 돼요. 가분수로 바꿔서 곱해요!']] });
+});
+HU('e5-decmul', () => {
+  const A = R(101, 999), B = R(11, 99), P = 4, prod = A * B, ans = dec(prod, P);
+  return mk({ expr: `${dec(A, 2)}\\times${dec(B, 2)}=\\square`, ans, hint: '자연수처럼 곱하고, 소수점 아래 자릿수(2+2=4)만큼 소수점을 찍어요.',
+    steps: [`$${A}\\times${B}=${prod}$`, `소수점 아래 $2+2=4$자리 → $${ans}$`], traps: [[dec(prod, 3), '소수점 아래 자릿수를 하나 덜 셌어요.'], [dec(prod, 2), '두 수의 소수점 아래 자릿수를 더해야 해요 (2+2=4).']] });
+});
+HU('e5-order', () => {
+  const b = R(2, 6), c = R(1, 6), s = b + c, k = R(2, 6), a = s * k, d = R(2, 9), f = R(3, 9);
+  let e, g; do { e = R(2, 6); g = R(1, f - 1); } while (e * (f - g) > k * d);
+  const ans = k * d - e * (f - g);
+  return mk({ expr: `${a}\\div(${b}+${c})\\times${d}-${e}\\times(${f}-${g})=\\square`, ans, hint: '괄호 → 곱셈·나눗셈(앞에서부터) → 덧셈·뺄셈 순서예요.',
+    steps: [`괄호: $${b}+${c}=${s}$, $${f}-${g}=${f - g}$`, `앞에서부터 나눗셈·곱셈: $${a}\\div${s}\\times${d}=${k}\\times${d}=${k * d}$`, `$${e}\\times${f - g}=${e * (f - g)}$`, `$${k * d}-${e * (f - g)}=${ans}$`],
+    traps: [[Math.round(a / (s * d)) === a / (s * d) ? a / (s * d) - e * (f - g) : 'x', '곱셈을 나눗셈보다 먼저 했어요. 곱셈·나눗셈은 앞에서부터!']].filter((t) => t[0] !== 'x') });
+});
+HU('e6-fracdiv', () => {
+  const b = R(2, 5), a = coNum(b, 1, b - 1), d = R(2, 5), c = coNum(d, 1, d - 1), w1 = R(1, 3), w2 = R(1, 2), f = R(2, 7), e = coNum(f, 1, f + 2);
+  const A = fr(w1 * b + a, b), B = fr(w2 * d + c, d), ans = A.div(B).mul(fr(e, f));
+  return mk({ expr: `${mixTex(w1, a, b)}\\div${mixTex(w2, c, d)}\\times\\frac{${e}}{${f}}=\\square`, ans, hint: '대분수 → 가분수, 나눗셈은 역수의 곱셈으로 바꿔 한 번에 계산해요.',
+    steps: [`가분수로: $${A.tex()}\\div${B.tex()}\\times\\frac{${e}}{${f}}$`, `역수를 곱해요: $${A.tex()}\\times${B.inv().tex()}\\times\\frac{${e}}{${f}}$`, `$=${ans.tex()}$${ans.n > ans.d ? ` $(=${ans.mixedTex()})$` : ''}`], traps: [[A.mul(B).mul(fr(e, f)), '나눗셈을 곱셈으로 바꿀 때 역수로 바꾸지 않았어요.']] });
+});
+HU('e6-decdiv', () => {
+  const Y = R(11, 99), q = R(12, 48), X = Y * q;
+  return mk({ expr: `${dec(X, 2)}\\div${dec(Y, 2)}=\\square`, ans: q, hint: '두 수에 똑같이 100을 곱하면 자연수의 나눗셈이 돼요.',
+    steps: [`두 수에 100을 곱해요: $${X}\\div${Y}$`, `$${X}\\div${Y}=${q}$`, `확인: $${dec(Y, 2)}\\times${q}=${dec(X, 2)}$ ✓`], traps: [[q / 10, '두 수에 같은 수(100)를 곱해야 해요.'], [q * 10, '두 수에 같은 수(100)를 곱해야 해요.']] });
+});
+HU('e6-ratio', () => {
+  let a, b; do { a = R(2, 7); b = R(2, 7); } while (a === b || gcd(a, b) !== 1);
+  const k = R(3, 12), T = (a + b) * k, big = Math.max(a, b);
+  return mk({ prompt: `사탕 ${T}개를 형과 동생이 $${a} : ${b}$로 나누어 가지려고 해요. 더 많이 가지는 사람은 몇 개를 가질까요?`, ans: big * k, hint: '비례배분: 전체 × (내 몫의 비) ÷ (비의 합)',
+    steps: [`비의 합: $${a}+${b}=${a + b}$`, `많이 가지는 쪽의 비: $${big}$`, `$${T}\\times\\frac{${big}}{${a + b}}=${big * k}$`], traps: [[T / 2, '똑같이 나누는 게 아니라 비율대로 나눠요.'], [Math.min(a, b) * k, '적게 가지는 사람의 몫이에요.']] });
+});
+HU('m1-int', () => {
+  const q = R(2, 5), p = coNum(q, 1, q + 2), s = R(2, 5), r = coNum(s, 1, s + 3), t = R(2, 4);
+  const A = fr(-p, q).div(fr(r, s)), B = fr(1, t * t), ans = A.sub(B);
+  return mk({ expr: `\\left(-\\frac{${p}}{${q}}\\right)\\div\\frac{${r}}{${s}}-\\left(-\\frac{1}{${t}}\\right)^{2}=\\square`, ans, hint: '거듭제곱 → 나눗셈 → 뺄셈 순서. (−1/t)²은 양수예요.',
+    steps: [`거듭제곱: $\\left(-\\frac{1}{${t}}\\right)^2=\\frac{1}{${t * t}}$`, `나눗셈: $-\\frac{${p}}{${q}}\\times\\frac{${s}}{${r}}=${A.tex()}$`, `$${A.tex()}-\\frac{1}{${t * t}}=${ans.tex()}$`], traps: [[A.add(B), '(−1/t)²은 양수라서 빼기가 그대로 남아요.']] });
+});
+HU('m1-expr', () => {
+  const k = R(2, 4), x = fr(-1, k), a = k * k * R(1, 3), b = nz(-6, 6), c = R(-5, 5), ans = x.mul(x).mul(a).add(x.mul(b)).add(c);
+  return mk({ prompt: `$x=-\\frac{1}{${k}}$일 때, 식의 값을 구하세요.`, expr: poly([a, b, c]), ans, hint: '분수를 대입할 때도 괄호를 꼭 씌워요.',
+    steps: [`$${a}\\times\\left(-\\frac{1}{${k}}\\right)^2=${fr(a, k * k).tex()}$`, `$${par(b)}\\times\\left(-\\frac{1}{${k}}\\right)=${fr(-b, k).tex()}$`, `합: $${fr(a, k * k).tex()} ${fr(-b, k).n < 0 ? '' : '+'} ${fr(-b, k).tex()} ${c ? sgnNum(c) : ''} = ${ans.tex()}$`],
+    traps: [[x.mul(x).mul(-a).add(x.mul(b)).add(c), '음수의 제곱은 양수예요.']] });
+});
+HU('m1-lineq', () => {
+  let s, p, q, a, b;
+  do { s = R(-9, 9); p = pick([2, 3, 4, 5, 6]); q = pick([2, 3, 4, 5, 6]); a = R(-5, 5); b = R(-5, 5); } while (p === q || (s + a) % p || (s - b) % q);
+  const c = (s + a) / p - (s - b) / q, L = lcm(p, q), m1 = L / p, m2 = L / q;
+  return mk({ prompt: '방정식의 해를 구하세요.', expr: `\\frac{${poly([1, a])}}{${p}}-\\frac{${poly([1, -b])}}{${q}}=${c}`, ans: s, hint: `양변에 분모의 최소공배수 ${L}을(를) 곱해 분모를 없애요. 우변에도 곱하는 걸 잊지 마세요!`,
+    steps: [`양변 × $${L}$: $${m1}(${poly([1, a])})-${m2}(${poly([1, -b])})=${c * L}$`, `전개: $${poly([m1, m1 * a])} ${sgnNum(-m2)}x ${sgnNum(m2 * b)} = ${c * L}$`, `$${poly([m1 - m2, 0])} = ${c * L - m1 * a - m2 * b}$`, `$x=${s}$`],
+    traps: [[sfr(c - m1 * a - m2 * b, m1 - m2), `우변 ${c}에도 ${L}을(를) 곱해야 해요.`], [sfr(c * L - m1 * a + m2 * b, m1 - m2), '빼기 뒤 괄호를 풀 때 부호를 바꿔야 해요.']] });
+});
+HU('m1-prop', () => {
+  const p = R(2, 4), k = R(2, 5), y0 = R(2, 6), z0 = R(2, 8), m = y0 * z0, r = R(2, 5), ans = fr(m, k * r);
+  return mk({ prompt: `$y$는 $x$에 정비례하고 $x=${p}$일 때 $y=${p * k}$예요. $z$는 $y$에 반비례하고 $y=${y0}$일 때 $z=${z0}$예요. $x=${r}$일 때 $z$의 값은?`, ans, hint: '두 관계식을 각각 구한 뒤 차례로 대입해요.',
+    steps: [`$y=ax$: $a=${p * k}\\div${p}=${k}$ → $y=${k}x$`, `$z=\\frac{b}{y}$: $b=${y0}\\times${z0}=${m}$ → $z=\\frac{${m}}{y}$`, `$x=${r}$ → $y=${k * r}$ → $z=\\frac{${m}}{${k * r}}=${ans.tex()}$`], traps: [[fr(k * r * z0, y0), 'z는 y에 반비례예요. 곱이 일정해요.']] });
+});
+HU('m2-exp', () => {
+  const c1 = pick([2, 3, -2, -3]), c2 = pick([1, 2, -1, -2]), m = R(2, 4), num = c1 * c1 * c2 ** 3;
+  const divs = [2, 3, 4, 6].filter((v) => num % v === 0), e = divs.length ? pick(divs) : 1;
+  const k = R(2, 2 * m + 2), coef = num / e, ex = 2 * m + 3 - k;
+  return mk({ prompt: '계산 결과를 $\\square x^{\\square}$ 꼴로 나타낼 때, 계수와 지수를 차례로 쓰세요.', expr: `(${c1}x^{${m}})^{2}\\times(${c2 === 1 ? '' : c2 === -1 ? '-' : c2}x)^{3}\\div ${e === 1 ? "" : e}x^{${k}}`, ans: `${coef},${ex}`, type: 'pair', format: '계수,지수',
+    hint: '계수는 계수끼리(부호 포함), 문자는 지수법칙으로 계산해요.',
+    steps: [`$(${c1}x^{${m}})^2=${c1 * c1}x^{${2 * m}}$`, `$(${c2 === 1 ? '' : c2 === -1 ? '-' : c2}x)^3=${c2 ** 3}x^{3}$`, `계수: $${c1 * c1}\\times${par(c2 ** 3)}\\div${e}=${coef}$`, `지수: $${2 * m}+3-${k}=${ex}$`],
+    traps: [[`${-coef},${ex}`, '음수를 세제곱하면 음수, 제곱하면 양수예요. 부호를 다시 확인해요.']] });
+});
+HU('m2-sys', () => {
+  const x = R(-4, 4) * 2, y = R(-3, 3) * 3; let a, b; do { a = nz(-9, 9); b = nz(-9, 9); } while (a * -2 - 3 * b === 0);
+  const c = (a * x + b * y) / 10, e = x / 2 - y / 3;
+  return mk({ prompt: '연립방정식의 해 $x, y$를 차례로 쓰세요.', expr: `\\begin{cases} ${lin2(a / 10, b / 10)} = ${c} \\\\ \\frac{x}{2} - \\frac{y}{3} = ${e} \\end{cases}`, ans: `${x},${y}`, type: 'pair', format: 'x,y',
+    hint: '소수는 10을, 분수는 분모의 최소공배수를 곱해서 정수 계수로 바꾼 뒤 풀어요.',
+    steps: [`① × 10: $${lin2(a, b)} = ${a * x + b * y}$`, `② × 6: $${lin2(3, -2)} = ${6 * e}$`, `가감법으로 풀면 $x=${x},\\ y=${y}$`, `확인: ①에 대입하면 $${lin2(a / 10, b / 10).replace(/x/, `(${x})`).replace(/y/, `(${y})`)}=${c}$ ✓`],
+    traps: x !== y ? [[`${y},${x}`, 'x와 y의 순서가 바뀌었어요.']] : [] });
+});
+HU('m2-ineq', () => {
+  const a = R(1, 5), b = R(1, 5), c = R(-3, 3), flip = Math.random() < 0.5, relI = R(0, 3), rels = ['>', '\\geq', '<', '\\leq'];
+  const k = flip ? 3 * a + 2 * b - 6 * c : 6 * c + 3 * a + 2 * b;
+  const finalRel = flip ? [2, 3, 0, 1][relI] : relI, wantSmallest = finalRel <= 1, ans = finalRel === 0 ? k + 1 : finalRel === 2 ? k - 1 : k;
+  const lhs = flip ? `\\frac{${poly([1, b])}}{3}-\\frac{${poly([1, -a])}}{2}` : `\\frac{${poly([1, -a])}}{2}-\\frac{${poly([1, b])}}{3}`;
+  return mk({ prompt: `부등식을 만족하는 ${wantSmallest ? '가장 작은' : '가장 큰'} 정수 $x$를 구하세요.`, expr: `${lhs} ${rels[relI]} ${c}`, ans, hint: '양변에 6을 곱해 분모를 없애요. x의 계수가 음수가 되면 나눌 때 부등호 방향이 바뀌어요!',
+    steps: [`양변 × 6: ${flip ? `$2(${poly([1, b])})-3(${poly([1, -a])}) ${rels[relI]} ${6 * c}$` : `$3(${poly([1, -a])})-2(${poly([1, b])}) ${rels[relI]} ${6 * c}$`}`,
+      flip ? `정리: $-x ${sgnNum(2 * b + 3 * a)} ${rels[relI]} ${6 * c}$ → 양변을 −1로 나누면 방향이 바뀌어요.` : `정리: $x ${sgnNum(-3 * a - 2 * b)} ${rels[relI]} ${6 * c}$`, `$x ${rels[finalRel]} ${k}$`, `${wantSmallest ? '가장 작은' : '가장 큰'} 정수: $${ans}$`],
+    traps: finalRel % 2 === 0 ? [[k, `등호가 없으니 ${k}은(는) 해가 아니에요.`]] : [[wantSmallest ? k + 1 : k - 1, `등호가 있으니 ${k}도 해예요.`]] });
+});
+HU('m2-linf', () => {
+  const x0 = R(-5, 5), y0 = R(-8, 8); let a, c; do { a = nz(-5, 5); c = nz(-5, 5); } while (a === c);
+  const b = y0 - a * x0, d = y0 - c * x0;
+  return mk({ prompt: `두 직선 $y=${poly([a, b])}$, $y=${poly([c, d])}$의 교점의 좌표 $(x, y)$를 쓰세요.`, ans: `${x0},${y0}`, type: 'pair', format: 'x,y', hint: '두 식을 연립해서 풀어요. y가 같으니 두 식의 우변을 같다고 놓아요.',
+    steps: [`$${poly([a, b])}=${poly([c, d])}$`, `$${poly([a - c, 0])}=${d - b}$ → $x=${x0}$`, `$y=${a}\\times${par(x0)} ${sgnNum(b)}=${y0}$`], traps: x0 !== y0 ? [[`${y0},${x0}`, '(x, y) 순서로 써요.']] : [] });
+});
+HU('m3-sqrt', () => {
+  const s = pick([2, 3, 5, 6, 7]), p = R(2, 4), q = R(1, 3), r = pick([1, 2, 3].filter((x) => x !== q)), t = R(1, 3), ans = p + q - r + t;
+  return mk({ prompt: `계산 결과를 $\\square\\sqrt{${s}}$ 꼴로 나타낼 때 □의 값은?`, expr: `\\sqrt{${s * p * p}}+\\sqrt{${s * q * q}}-\\sqrt{${s * r * r}}+\\frac{${s * t}}{\\sqrt{${s}}}`, ans,
+    hint: '근호 안의 제곱수를 밖으로 꺼내고, 분모의 근호는 유리화해요.',
+    steps: [`$\\sqrt{${s * p * p}}=${p}\\sqrt{${s}}$, $\\sqrt{${s * q * q}}=${q === 1 ? '' : q}\\sqrt{${s}}$, $\\sqrt{${s * r * r}}=${r === 1 ? '' : r}\\sqrt{${s}}$`, `유리화: $\\frac{${s * t}}{\\sqrt{${s}}}=\\frac{${s * t}\\sqrt{${s}}}{${s}}=${t === 1 ? '' : t}\\sqrt{${s}}$`, `$(${p}+${q}-${r}+${t})\\sqrt{${s}}=${ans}\\sqrt{${s}}$`],
+    traps: [[p + q - r, `마지막 항 ${s * t}/√${s}도 유리화하면 ${t}√${s}예요.`]] });
+});
+HU('m3-expand', () => {
+  const a = nz(-5, 5), b = nz(-5, 5), c = nz(-5, 5), X = 2 * a - c + b, C = a * a + b * c;
+  return mk({ prompt: '간단히 한 식 $\\square x+\\square$ 의 계수와 상수항을 차례로 쓰세요.', expr: `(${poly([1, a])})^{2}-(${poly([1, -b])})(${poly([1, c])})`, ans: `${X},${C}`, type: 'pair', format: 'x의 계수,상수항',
+    hint: '각각 전개한 뒤, 빼기 뒤의 괄호는 모든 항의 부호를 바꿔요.',
+    steps: [`$(${poly([1, a])})^2=${poly([1, 2 * a, a * a])}$`, `$(${poly([1, -b])})(${poly([1, c])})=${poly([1, c - b, -b * c])}$`, `빼기: $${poly([1, 2 * a, a * a])}-(${poly([1, c - b, -b * c])})=${poly([X, C])}$`],
+    traps: [[`${2 * a + c - b},${a * a - b * c}`, '빼기 뒤 괄호를 풀 때 부호를 바꾸지 않았어요.'], [`${a},${a * a + b * c}`, '(x+a)² = x² + 2ax + a² 에서 2를 빠뜨렸어요.']] });
+});
+HU('m3-quad', () => {
+  const p = R(2, 4), q = nz(-6, 6), r = R(1, 7), s1 = fr(-q + r, p), s2 = fr(-q - r, p);
+  return mk({ prompt: '이차방정식의 해를 모두 쓰세요. (분수는 3/2 처럼)', expr: `(${poly([p, q])})^{2}=${r * r}`, ans: `${s1},${s2}`, type: 'set', format: '해1,해2', hint: '제곱근을 이용해요: A² = k 이면 A = ±√k. ±를 잊지 마세요!',
+    steps: [`$${poly([p, q])}=\\pm${r}$`, `$${poly([p, 0])}=${-q}\\pm${r}$`, `$x=${s1.tex()}$ 또는 $x=${s2.tex()}$`], traps: [[`${s1.neg()},${s2.neg()}`, '이항할 때 부호를 바꿔야 해요.']] });
+});
+HU('m3-qf', () => {
+  const p = nz(-4, 4), q = R(-9, 9), a = nz(-3, 3), dx = pick([-3, -2, -1, 1, 2, 3]), r = p + dx, s = a * dx * dx + q;
+  return mk({ prompt: `꼭짓점이 $(${p}, ${q})$이고 점 $(${r}, ${s})$를 지나는 이차함수 $y=a(x-p)^2+q$ 에서 $a$의 값은?`, ans: a, hint: '꼭짓점으로 식을 세우고, 지나는 점을 대입해 a를 구해요.',
+    steps: [`$y=a(x - ${par(p)})^2 ${sgnNum(q)}$`, `$(${r}, ${s})$ 대입: $${s}=a(${r}-${par(p)})^2 ${sgnNum(q)}$`, `$${s - q}=${dx * dx}a$ → $a=${a}$`], traps: [[sfr(s - q, dx), '(x − p)를 제곱하는 걸 잊었어요.']] });
+});
+HU('h1-poly', () => {
+  const a = nz(-4, 4), b = nz(-5, 5), c = nz(-4, 4), d = nz(-5, 5), wx = Math.random() < 0.5;
+  const ans = wx ? a * d + b * c : b + a * c + d;
+  return mk({ prompt: `다음 식을 전개했을 때 ${wx ? '$x$의 계수' : '$x^2$의 계수'}는?`, expr: `(${poly([1, a, b])})(${poly([1, c, d])})`, ans, hint: '해당 차수가 나오는 곱을 빠짐없이 골라 더해요.',
+    steps: wx ? [`$x$항: $${a}x\\times${par(d)}$ 와 $${par(b)}\\times${c}x$`, `$${a * d}+${par(b * c)}=${ans}$`] : [`$x^2$항: $x^2\\times${par(d)}$, $${a}x\\times${c}x$, $${par(b)}\\times x^2$`, `$${d}+${par(a * c)}+${par(b)}=${ans}$`],
+    traps: [[wx ? a * d : a * c, '같은 차수가 나오는 곱이 더 있어요. 빠짐없이 찾아요!']] });
+});
+HU('h1-rem', () => {
+  let p, q; do { p = R(-3, 3); q = R(-3, 3); } while (p === q);
+  const m = nz(-5, 5), n = R(-9, 9), r1 = m * p + n, r2 = m * q + n;
+  return mk({ prompt: `다항식 $f(x)$를 $${poly([1, -p])}$로 나눈 나머지는 $${r1}$, $${poly([1, -q])}$로 나눈 나머지는 $${r2}$입니다. $f(x)$를 $(${poly([1, -p])})(${poly([1, -q])})$로 나눈 나머지를 $ax+b$라 할 때 $a, b$를 차례로 쓰세요.`, ans: `${m},${n}`, type: 'pair', format: 'a,b',
+    hint: '이차식으로 나눈 나머지는 일차식 ax+b. f(p), f(q)에 대입하면 ax+b의 값과 같아요.',
+    steps: [`$f(x)=(${poly([1, -p])})(${poly([1, -q])})Q(x)+ax+b$`, `$f(${p})=${p}a+b=${r1}$, $f(${q})=${q}a+b=${r2}$`, `빼면 $${q - p}a=${r2 - r1}$ → $a=${m}$, $b=${n}$`], traps: [[`${n},${m}`, '(a, b) 순서로 써요.']] });
+});
+HU('h1-cpx', () => {
+  if (Math.random() < 0.5) {
+    const k = R(2, 5), v = [[1, 0], [0, 1], [-1, 0], [0, -1]][k % 4], re = v[0] * 2 ** k, im = v[1] * 2 ** k;
+    return mk({ prompt: '계산 결과를 $a+bi$ 꼴로 나타낼 때 $a, b$를 차례로 쓰세요.', expr: `(1+i)^{${2 * k}}`, ans: `${re},${im}`, type: 'pair', format: '실수부분,허수부분', hint: '(1+i)² = 2i 를 먼저 구하면 쉬워요.',
+      steps: [`$(1+i)^2=1+2i+i^2=2i$`, `$(1+i)^{${2 * k}}=(2i)^{${k}}=${2 ** k}i^{${k}}$`, `$i^{${k}}=${cpx(v[0], v[1])}$ → $${cpx(re, im)}$`], traps: [[`${2 ** k},0`, 'i의 거듭제곱은 i, −1, −i, 1 순서로 반복돼요.']] });
+  }
+  const n = R(5, 30), cyc = [[0, 1], [-1, 0], [0, -1], [1, 0]]; let re = 0, im = 0; for (let j = 1; j <= n; j++) { re += cyc[(j - 1) % 4][0]; im += cyc[(j - 1) % 4][1]; }
+  return mk({ prompt: '계산 결과를 $a+bi$ 꼴로 나타낼 때 $a, b$를 차례로 쓰세요.', expr: `i+i^{2}+i^{3}+\\cdots+i^{${n}}`, ans: `${re},${im}`, type: 'pair', format: '실수부분,허수부분', hint: '연속한 4개의 합 i + i² + i³ + i⁴ = 0 이에요.',
+    steps: [`$i+i^2+i^3+i^4=i-1-i+1=0$`, `${n} = 4×${Math.floor(n / 4)} + ${n % 4} → 남는 항 ${n % 4}개만 더해요.`, `결과: $${cpx(re, im)}$`], traps: [] });
+});
+HU('h1-vieta', () => {
+  const r1 = nz(-5, 5), r2 = nz(-5, 5), s = r1 + r2, p = r1 * r2, S2 = s * s - 2 * p;
+  return mk({ prompt: `이차방정식 $${poly([1, -s, p])}=0$의 두 근을 $\\alpha, \\beta$라 할 때, $\\alpha^2, \\beta^2$을 두 근으로 하는 이차방정식 $x^2+bx+c=0$의 $b, c$를 차례로 쓰세요.`, ans: `${-S2},${p * p}`, type: 'pair', format: 'b,c',
+    hint: '두 근의 합 α²+β² = (α+β)² − 2αβ, 두 근의 곱 α²β² = (αβ)². 그리고 x² − (합)x + (곱) = 0',
+    steps: [`$\\alpha+\\beta=${s}$, $\\alpha\\beta=${p}$`, `합: $\\alpha^2+\\beta^2=${s * s}-2\\times${par(p)}=${S2}$`, `곱: $(\\alpha\\beta)^2=${p * p}$`, `$x^2-${par(S2)}x+${p * p}=0$ → $b=${-S2},\\ c=${p * p}$`], traps: [[`${S2},${p * p}`, 'x² − (두 근의 합)x + (두 근의 곱) = 0 이라서 b는 합의 부호를 바꾼 값이에요.']] });
+});
+HU('h1-count', () => {
+  const m = R(2, 4), w = R(2, Math.min(3, m + 1)), ans = fact(m) * nPr(m + 1, w);
+  return mk({ prompt: `남학생 ${m}명과 여학생 ${w}명이 일렬로 설 때, 여학생끼리 서로 이웃하지 않게 서는 경우의 수는?`, ans, hint: '남학생을 먼저 세우고, 남학생 사이사이와 양 끝의 자리에 여학생을 넣어요.',
+    steps: [`남학생 ${m}명 나열: $${m}!=${fact(m)}$`, `남학생 사이와 양 끝 자리: ${m + 1}곳 중 ${w}곳에 여학생을 순서 있게: $ {}_{${m + 1}}\\mathrm{P}_{${w}}=${nPr(m + 1, w)}$`, `$${fact(m)}\\times${nPr(m + 1, w)}=${ans}$`],
+    traps: [[fact(m) * nCr(m + 1, w), '여학생들도 서로 다른 사람이라 순서가 있어요 (C가 아니라 P).'], [fact(m + w), '이건 조건 없는 전체 경우의 수예요.']] });
+});
+HU('h2-explog', () => {
+  const j = R(0, 2), i = R(j + 1, 4), u = 2 ** i, v = 2 ** j, b = R(1, 5), x = v + b, a = u - x, k = i + j;
+  return mk({ prompt: '방정식의 해를 구하세요.', expr: `\\log_{2}(${poly([1, a])})+\\log_{2}(${poly([1, -b])})=${k}`, ans: x, hint: '로그의 합은 진수의 곱. 마지막에 진수 조건(진수 > 0)으로 해를 골라요!',
+    steps: [`진수 조건: $${poly([1, a])}>0$, $${poly([1, -b])}>0$`, `$\\log_2(${poly([1, a])})(${poly([1, -b])})=${k}$ → $(${poly([1, a])})(${poly([1, -b])})=${2 ** k}$`, `$${poly([1, a - b, -a * b - 2 ** k])}=0$ → $x=${x}$ 또는 $x=${b - a - x}$`, `진수 조건을 만족하는 해: $x=${x}$`],
+    traps: [[b - a - x, '진수 조건(진수 > 0)을 확인하지 않았어요. 이 값을 넣으면 진수가 음수가 돼요.']] });
+});
+HU('h2-trig', () => {
+  const t = fr(...pick([[1, 2], [1, 3], [2, 3], [-1, 2], [3, 4], [1, 5], [7, 5], [-1, 3]])), ans = t.mul(t).sub(1).div(2);
+  return mk({ prompt: `$\\sin\\theta+\\cos\\theta=${t.tex()}$일 때, $\\sin\\theta\\cos\\theta$의 값은?`, ans, hint: '양변을 제곱하고 sin²θ + cos²θ = 1 을 이용해요.',
+    steps: [`양변 제곱: $\\sin^2\\theta+2\\sin\\theta\\cos\\theta+\\cos^2\\theta=${t.mul(t).tex()}$`, `$1+2\\sin\\theta\\cos\\theta=${t.mul(t).tex()}$`, `$\\sin\\theta\\cos\\theta=\\frac{${t.mul(t).tex()}-1}{2}=${ans.tex()}$`],
+    traps: [[t.mul(t).div(2), 'sin²θ + cos²θ = 1 을 빼는 걸 잊었어요.'], [t.mul(t).add(1).div(2), '1을 이항할 때 부호가 바뀌어요.']] });
+});
+HU('h2-seq', () => {
+  const n = R(4, 10), p = nz(-4, 5), s2 = (n * (n + 1) * (2 * n + 1)) / 6, s1 = (n * (n + 1)) / 2, ans = s2 + p * s1;
+  return mk({ expr: `\\sum_{k=1}^{${n}}(${poly([1, p, 0], 'k')})=\\square`, ans, hint: 'Σk² = n(n+1)(2n+1)/6,  Σk = n(n+1)/2',
+    steps: [`$\\sum k^2=\\frac{${n}\\times${n + 1}\\times${2 * n + 1}}{6}=${s2}$`, `$\\sum k=\\frac{${n}\\times${n + 1}}{2}=${s1}$`, `$${s2} ${sgnNum(p)}\\times${s1}=${ans}$`], traps: [[s1 * s1 + p * s1, 'Σk²은 (Σk)²이 아니에요. n(n+1)(2n+1)/6 공식을 써요.']] });
+});
+HU('h2-lim', () => {
+  if (Math.random() < 0.5) {
+    const c = R(2, 5), a = R(-3, 5), b = c * c - a;
+    return mk({ expr: `\\lim_{x\\to ${a}}\\frac{\\sqrt{${poly([1, b])}}-${c}}{${poly([1, -a])}}=\\square`, ans: fr(1, 2 * c), hint: '0/0 꼴 + 근호 → 분모·분자에 켤레식을 곱해 유리화해요.',
+      steps: [`분자·분모에 $\\sqrt{${poly([1, b])}}+${c}$ 를 곱해요.`, `분자: $(${poly([1, b])})-${c * c}=${poly([1, -a])}$ → 약분`, `$\\lim\\frac{1}{\\sqrt{${poly([1, b])}}+${c}}=\\frac{1}{${c}+${c}}=${fr(1, 2 * c).tex()}$`], traps: [[0, '0/0 꼴은 0이 아니에요. 유리화 후 약분!'], [fr(1, c), '분모의 √ + c 는 c + c = 2c 예요.']] });
+  }
+  const p = nz(-8, 8);
+  return mk({ expr: `\\lim_{x\\to\\infty}\\left(\\sqrt{${poly([1, p, 0])}}-x\\right)=\\square`, ans: fr(p, 2), hint: '∞ − ∞ 꼴 → 켤레식으로 유리화한 뒤 최고차항으로 나눠요.',
+    steps: [`$\\frac{(${poly([1, p, 0])})-x^2}{\\sqrt{${poly([1, p, 0])}}+x}=\\frac{${p}x}{\\sqrt{${poly([1, p, 0])}}+x}$`, `분모·분자를 x로 나누면 $\\frac{${p}}{\\sqrt{1+\\frac{${p}}{x}}+1}\\to\\frac{${p}}{2}$`], traps: [[0, '∞ − ∞ 는 0이 아니에요. 유리화해서 계산해요.'], [p, '분모가 √1 + 1 = 2 예요.']] });
+});
+HU('h2-deriv', () => {
+  let p, q; do { p = R(-3, 2); q = R(p + 1, 4); } while ((p + q) % 2);
+  const c = R(-5, 5), B = (-3 * (p + q)) / 2, C = 3 * p * q, f = (x) => x ** 3 + B * x * x + C * x + c, wantMax = Math.random() < 0.5, xv = wantMax ? p : q;
+  return mk({ prompt: `함수 $f(x)=${poly([1, B, C, c])}$의 ${wantMax ? '극댓값' : '극솟값'}은?`, ans: f(xv), hint: "f′(x) = 0 인 x를 찾고, 증가·감소를 보고 극대/극소를 정해요. 극값은 그 점의 함숫값!",
+    steps: [`$f'(x)=${poly([3, 2 * B, C])}=3(${poly([1, -p])})(${poly([1, -q])})$`, `$f'(x)=0$: $x=${p}$ 또는 $x=${q}$`, `최고차항이 양수 → $x=${p}$에서 극대, $x=${q}$에서 극소`, `${wantMax ? '극댓값' : '극솟값'}: $f(${xv})=${f(xv)}$`],
+    traps: [[xv, '극값은 x좌표가 아니라 그때의 함숫값 f(x)예요.'], [f(wantMax ? q : p), `${wantMax ? '극솟값' : '극댓값'}을 구했어요. 증가→감소가 극대, 감소→증가가 극소예요.`]] });
+});
+HU('h2-int', () => {
+  const p = R(-3, 2), q = R(p + 1, p + 5), ans = fr((q - p) ** 3, 6);
+  return mk({ prompt: `곡선 $y=${poly([1, -(p + q), p * q])}$와 $x$축으로 둘러싸인 부분의 넓이는?`, ans, hint: 'x축과의 교점을 구하고, 그 사이에서 |정적분|을 계산해요. 넓이는 항상 양수!',
+    steps: [`교점: $${poly([1, -(p + q), p * q])}=0$ → $x=${p},\\ ${q}$`, `그 사이에서 곡선은 x축 아래 → 넓이 $=-\\int_{${p}}^{${q}}(${poly([1, -(p + q), p * q])})dx$`, `공식 $\\frac{(\\beta-\\alpha)^3}{6}$: $\\frac{${q - p}^3}{6}=${ans.tex()}$`], traps: [[ans.neg(), '넓이는 양수예요. 곡선이 x축 아래에 있으면 정적분 값에 −를 붙여요.']] });
+});
+HU('h3-series', () => {
+  let a, b; do { a = R(2, 5); b = R(2, 5); } while (a === b);
+  const ans = fr(1, a - 1).add(fr(1, b - 1));
+  return mk({ expr: `\\sum_{n=1}^{\\infty}\\left(\\frac{1}{${a}^{n}}+\\frac{1}{${b}^{n}}\\right)=\\square`, ans, hint: '두 등비급수로 나눠서 각각 (첫째항)/(1 − 공비)로 구해요.',
+    steps: [`$\\sum\\frac{1}{${a}^n}=\\frac{1/${a}}{1-1/${a}}=${fr(1, a - 1).tex()}$`, `$\\sum\\frac{1}{${b}^n}=\\frac{1/${b}}{1-1/${b}}=${fr(1, b - 1).tex()}$`, `합: $${ans.tex()}$`], traps: [[fr(a, a - 1).add(fr(b, b - 1)), 'n=1부터 시작하니 첫째항은 1이 아니라 1/a예요.']] });
+});
+HU('h3-diff', () => {
+  let a, k; do { a = R(-4, 4); k = nz(-3, 3); } while (2 * k + a === 0);
+  const b = R(-5, 5), ans = fr(3 * k * k + b, 2 * k + a);
+  return mk({ prompt: `매개변수 $t$로 나타낸 곡선 $x=${poly([1, a, 0], 't')},\\ y=${poly([1, 0, b, 0], 't')}$ 에서 $t=${k}$일 때 $\\frac{dy}{dx}$의 값은?`, ans, hint: 'dy/dx = (dy/dt) ÷ (dx/dt)',
+    steps: [`$\\frac{dx}{dt}=${poly([2, a], 't')}$, $\\frac{dy}{dt}=${poly([3, 0, b], 't')}$`, `$t=${k}$: $\\frac{${3 * k * k + b}}{${2 * k + a}}=${ans.tex()}$`], traps: [[sfr(2 * k + a, 3 * k * k + b), '분자·분모가 바뀌었어요: (dy/dt) ÷ (dx/dt)']] });
+});
+HU('h3-prob', () => {
+  const w = R(2, 5), b = R(2, 5), n = w + b, ans = fr(1).sub(fr(nCr(b, 2), nCr(n, 2)));
+  return mk({ prompt: `흰 공 ${w}개, 검은 공 ${b}개가 든 주머니에서 공 2개를 동시에 꺼낼 때, 흰 공이 적어도 1개 나올 확률은?`, ans, hint: '"적어도"는 여사건! 1 − (모두 검은 공일 확률)',
+    steps: [`모두 검은 공일 확률: $\\frac{{}_{${b}}\\mathrm{C}_{2}}{{}_{${n}}\\mathrm{C}_{2}}=\\frac{${nCr(b, 2)}}{${nCr(n, 2)}}$`, `$1-\\frac{${nCr(b, 2)}}{${nCr(n, 2)}}=${ans.tex()}$`],
+    traps: [[fr(nCr(w, 2), nCr(n, 2)), '이건 둘 다 흰 공일 확률이에요.'], [fr(1).sub(fr(b * b, n * n)), '동시에 꺼내면 같은 공을 두 번 꺼낼 수 없어요 (비복원).']] });
+});
+HU('h3-stat', () => {
+  const [pn, pd] = pick([[1, 2], [1, 3], [1, 4], [2, 3], [1, 5]]), n = pd * R(2, 8), p = fr(pn, pd), E = p.mul(n), V = E.mul(fr(1).sub(p)), ans = V.add(E.mul(E));
+  return mk({ prompt: `확률변수 $X$가 이항분포 $B\\left(${n}, ${p.tex()}\\right)$를 따를 때, $E(X^2)$의 값은?`, ans, hint: 'V(X) = E(X²) − {E(X)}² 이므로 E(X²) = V(X) + {E(X)}²',
+    steps: [`$E(X)=np=${E.tex()}$`, `$V(X)=np(1-p)=${V.tex()}$`, `$E(X^2)=V(X)+\\{E(X)\\}^2=${V.tex()}+${E.mul(E).tex()}=${ans.tex()}$`], traps: [[E.mul(E), 'V(X)를 더하는 걸 잊었어요.'], [V, '이건 분산이에요. E(X²) = V(X) + {E(X)}²']] });
+});
+// 최상 단계를 각 단원 생성기에 연결 (d=3 → HARD, 그 외는 기존 하/중/상)
+UNITS.forEach((u) => { const base = u.gen; u.gen = (d) => (d >= 3 && HARD[u.id] ? HARD[u.id]() : base(Math.min(d, 2))); });
 </script>
 <script>
 'use strict';
@@ -1279,7 +1599,7 @@ function newUser(id, name, grade, avatar) {
   return migrateUser({ id, name, grade, avatar, createdAt: Date.now(), updatedAt: Date.now() });
 }
 function migrateUser(u) {
-  u.settings = Object.assign({ dailyGoal: 20, sessionSize: 10, penOnly: false, autoRecognize: true }, u.settings || {});
+  u.settings = Object.assign({ dailyGoal: 20, sessionSize: 10, penOnly: false, autoRecognize: true, level: 'auto', stretch: false }, u.settings || {});
   u.days = u.days || {}; u.units = u.units || {}; u.wrong = u.wrong || []; u.hw = u.hw || {}; u.badges = u.badges || [];
   return u;
 }
@@ -1298,16 +1618,26 @@ function bestStreakOf(u) {
   return best;
 }
 function totals(u) { let s = 0, c = 0, days = 0; for (const k in u.days) { s += u.days[k].s; c += u.days[k].c; if (u.days[k].s > 0) days++; } return { s, c, days }; }
+/** 단원의 현재 난이도(0 하 ~ 3 최상). 설정에서 고정했으면 그 값, 자동이면 단원별 레벨(처음엔 '중') */
 function unitLevel(u, unitId) {
-  const st = u.units[unitId]; if (!st || !st.r) return 0;
-  const r = st.r.slice(-10), n = r.length, acc = [...r].filter((x) => x === '1').length / n;
-  if (n >= 6 && acc >= 0.85) return 2; if (n >= 4 && acc >= 0.6) return 1; return 0;
+  if (u.settings.level !== 'auto' && u.settings.level != null) return +u.settings.level;
+  const st = u.units[unitId]; if (!st) return 1;
+  if (st.lv != null) return st.lv;
+  const r = (st.r || '').slice(-10), n = r.length, acc = n ? [...r].filter((x) => x === '1').length / n : 0;
+  return n >= 6 && acc >= 0.85 ? 2 : n >= 4 && acc < 0.5 ? 0 : 1;
 }
+/** 기록 저장 + 자동 레벨 조절: 연속 3번 맞히면 한 단계 위, 연속 2번 틀리면 한 단계 아래. 'up' | 'down' | null 반환 */
 function recordResult(u, item, correct, secs) {
   const k = today(); const d = u.days[k] || (u.days[k] = { s: 0, c: 0, t: 0 });
   d.s++; if (correct) d.c++; d.t += Math.round(secs);
+  const cur = unitLevel(u, item.unitId);
   const st = u.units[item.unitId] || (u.units[item.unitId] = { s: 0, c: 0, r: '' });
   st.s++; if (correct) st.c++; st.r = (st.r + (correct ? '1' : '0')).slice(-12);
+  if (u.settings.level !== 'auto' || item.review) return null;
+  st.lv = cur; st.sk = correct ? Math.max(0, st.sk || 0) + 1 : Math.min(0, st.sk || 0) - 1;
+  if (st.sk >= 3 && st.lv < 3) { st.lv++; st.sk = 0; return 'up'; }
+  if (st.sk <= -2 && st.lv > 0) { st.lv--; st.sk = 0; return 'down'; }
+  return null;
 }
 function addWrongNote(u, item, userAns) {
   if (item.noteId) { const n = u.wrong.find((x) => x.id === item.noteId); if (n) { n.tries = (n.tries || 1) + 1; n.user = userAns; n.at = Date.now(); } return; }
@@ -1610,7 +1940,7 @@ function modal(html, { onMount, wide } = {}) {
 }
 const closeModal = () => { $('#overlay-root').innerHTML = ''; };
 const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-const levelBadge = (d) => ['<span class="px-2 py-0.5 rounded-full bg-mint-100 text-mint-600 text-xs">하</span>', '<span class="px-2 py-0.5 rounded-full bg-butter-100 text-[#B08A00] text-xs">중</span>', '<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-500 text-xs">상</span>'][d];
+const levelBadge = (d) => ['<span class="px-2 py-0.5 rounded-full bg-mint-100 text-mint-600 text-xs">하</span>', '<span class="px-2 py-0.5 rounded-full bg-butter-100 text-[#B08A00] text-xs">중</span>', '<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-500 text-xs">상</span>', '<span class="px-2 py-0.5 rounded-full bg-lav-500 text-white text-xs">최상 🔥</span>'][d];
 const avatarBg = (a) => AV_BG[AVATARS.indexOf(a) % AV_BG.length] || 'bg-lav-100';
 const schoolOf = (g) => (g <= 6 ? '초등' : g <= 9 ? '중학' : '고등');
 
@@ -1764,7 +2094,7 @@ function renderHome() {
               <span class="px-3 py-1 rounded-full bg-peach-100 text-peach-500">⏱ ${Math.round(st.t / 60)}분</span>
             </div>
             <button id="btn-daily" class="btn btn-3d mt-4 w-full sm:w-auto px-8 py-4 rounded-2xl bg-lav-400 hover:bg-lav-500 text-white font-jua text-xl">${st.s ? '오늘의 연산 이어서 하기 ▶' : '오늘의 연산 시작 ▶'}</button>
-            <div class="text-xs text-ink-400 mt-2">${GRADE_NAMES[u.grade]} 단원을 섞어 ${u.settings.sessionSize}문제 · 실력에 맞춰 난이도 자동 조절${unresolved ? ' · 오답 복습 포함' : ''}</div>
+            <div class="text-xs text-ink-400 mt-2">${GRADE_NAMES[u.grade]} 단원을 섞어 ${u.settings.sessionSize}문제 · ${u.settings.level === 'auto' ? '3연속 정답이면 레벨 업 (하→중→상→최상)' : `난이도 ${LEVELS[u.settings.level]} 고정`}${u.settings.stretch ? ' · 한 학년 위 문제 포함' : ''}${unresolved ? ' · 오답 복습 포함' : ''}</div>
           </div>
         </div>
       </section>
@@ -1809,14 +2139,14 @@ function renderHome() {
   $('#btn-link').addEventListener('click', () => showLinkModal(false));
   $('#btn-set').addEventListener('click', openSettings);
   $('#btn-out').addEventListener('click', () => renderLogin());
-  $$('.unit-quick').forEach((b) => b.addEventListener('click', () => { const un = unitById(b.dataset.unit); startSession(makeItems(un, unitLevel(u, un.id), u.settings.sessionSize), 'custom', `${un.name}`); }));
+  $$('.unit-quick').forEach((b) => b.addEventListener('click', () => { const un = unitById(b.dataset.unit); startSession(makeItems(un, 'auto', u.settings.sessionSize), 'custom', `${un.name}`); }));
 }
 
 /* =====================================================================
  * 11. 단원 선택
  * ===================================================================== */
 function renderSelect(g) {
-  cleanupView(); App.view = 'select'; const u = App.user; let unitId = null, d = 1, n = u.settings.sessionSize;
+  cleanupView(); App.view = 'select'; const u = App.user; let unitId = null, d = 'auto', n = u.settings.sessionSize;
   $('#app').innerHTML = `
   <div class="max-w-5xl mx-auto px-3 sm:px-5 pt-4 pb-40 fade-in">
     <div class="flex items-center gap-3 mb-4"><button id="back" class="btn w-11 h-11 rounded-2xl bg-white shadow-soft text-xl">←</button><h2 class="font-jua text-2xl text-ink-700">단원 골라 풀기</h2></div>
@@ -1832,12 +2162,12 @@ function renderSelect(g) {
     }).join('')}</div>
   </div>
   <div class="fixed inset-x-0 bottom-0 z-30 p-3"><div class="max-w-5xl mx-auto card p-4 bg-white/95 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-    <div class="flex items-center gap-2"><span class="text-sm text-ink-400 w-12">난이도</span>${LEVELS.map((l, i) => `<button data-d="${i}" class="btn dsel px-4 py-2 rounded-xl font-jua">${l}</button>`).join('')}</div>
+    <div class="flex items-center gap-1.5 flex-wrap"><span class="text-sm text-ink-400 w-12">난이도</span><button data-d="auto" class="btn dsel px-3 py-2 rounded-xl font-jua">자동</button>${LEVELS.map((l, i) => `<button data-d="${i}" class="btn dsel px-3 py-2 rounded-xl font-jua">${l}</button>`).join('')}</div>
     <div class="flex items-center gap-2"><span class="text-sm text-ink-400 w-12">문제 수</span>${[5, 10, 15, 20].map((x) => `<button data-n="${x}" class="btn nsel px-3 py-2 rounded-xl font-jua">${x}</button>`).join('')}</div>
     <button id="go" class="btn btn-3d sm:ml-auto px-8 py-3 rounded-2xl bg-lav-300 text-white font-jua text-xl" disabled>단원을 골라요</button>
   </div></div>`;
   const paint = () => {
-    $$('.dsel').forEach((b) => { const on = +b.dataset.d === d; b.className = `btn dsel px-4 py-2 rounded-xl font-jua ${on ? ['bg-mint-300 text-white', 'bg-butter-300 text-ink-700', 'bg-rose-300 text-white'][d] : 'bg-lav-50 text-ink-600'}`; });
+    $$('.dsel').forEach((b) => { const v = b.dataset.d === 'auto' ? 'auto' : +b.dataset.d, on = v === d; b.className = `btn dsel px-3 py-2 rounded-xl font-jua ${on ? (v === 'auto' ? 'bg-sky-300 text-white' : ['bg-mint-300 text-white', 'bg-butter-300 text-ink-700', 'bg-rose-300 text-white', 'bg-lav-500 text-white'][v]) : 'bg-lav-50 text-ink-600'}`; });
     $$('.nsel').forEach((b) => { b.className = `btn nsel px-3 py-2 rounded-xl font-jua ${+b.dataset.n === n ? 'bg-sky-300 text-white' : 'bg-lav-50 text-ink-600'}`; });
     $$('.usel').forEach((b) => b.classList.toggle('!border-lav-300', b.dataset.unit === unitId));
     $$('.usel').forEach((b) => b.classList.toggle('bg-lav-50', b.dataset.unit === unitId));
@@ -1847,10 +2177,10 @@ function renderSelect(g) {
   paint();
   $('#back').addEventListener('click', renderHome);
   $$('.gtab').forEach((b) => b.addEventListener('click', () => renderSelect(+b.dataset.g)));
-  $$('.usel').forEach((b) => b.addEventListener('click', () => { unitId = b.dataset.unit; d = unitLevel(u, unitId); paint(); }));
-  $$('.dsel').forEach((b) => b.addEventListener('click', () => { d = +b.dataset.d; paint(); }));
+  $$('.usel').forEach((b) => b.addEventListener('click', () => { unitId = b.dataset.unit; paint(); }));
+  $$('.dsel').forEach((b) => b.addEventListener('click', () => { d = b.dataset.d === 'auto' ? 'auto' : +b.dataset.d; paint(); }));
   $$('.nsel').forEach((b) => b.addEventListener('click', () => { n = +b.dataset.n; paint(); }));
-  $('#go').addEventListener('click', () => { if (!unitId) return; const un = unitById(unitId); startSession(makeItems(un, d, n), 'custom', un.name); });
+  $('#go').addEventListener('click', () => { if (!unitId) return; const un = unitById(unitId); startSession(makeItems(un, d, n), 'custom', un.name); App.session.fixedD = d === 'auto' ? null : d; });
 }
 
 /* =====================================================================
@@ -1860,7 +2190,11 @@ function genUnique(un, d, seen) {
   for (let t = 0; t < 8; t++) { const p = un.gen(d); const key = p.prompt + '|' + p.expr; if (!seen.has(key)) { seen.add(key); return p; } }
   return un.gen(d);
 }
-function makeItems(un, d, n) { const seen = new Set(); return Array.from({ length: n }, () => ({ unitId: un.id, g: un.g, d, prob: genUnique(un, d, seen) })); }
+/** d가 'auto'면 문제를 보여 줄 때 그 순간의 레벨로 만듦 (풀면서 바로 레벨업이 반영됨) */
+function makeItems(un, d, n) {
+  const seen = new Set();
+  return Array.from({ length: n }, () => (d === 'auto' ? { unitId: un.id, g: un.g, d: null, prob: null } : { unitId: un.id, g: un.g, d, prob: genUnique(un, d, seen) }));
+}
 function startDaily() {
   const u = App.user, n = u.settings.sessionSize, items = [], seen = new Set();
   const reviews = u.wrong.filter((w) => !w.resolved).slice(-2).reverse();
@@ -1868,13 +2202,14 @@ function startDaily() {
   let pool = shuffle(unitsOf(u.grade)); let k = 0;
   while (items.length < n) {
     let un = pool[k++ % pool.length];
-    if (u.grade > 1 && Math.random() < 0.15) un = pick(unitsOf(u.grade - 1)); // 이전 학년 복습 한 스푼
-    const d = unitLevel(u, un.id); items.push({ unitId: un.id, g: un.g, d, prob: genUnique(un, d, seen) });
+    if (u.settings.stretch && u.grade < 12 && Math.random() < 0.3) un = pick(unitsOf(u.grade + 1)); // 한 학년 위 도전
+    else if (u.grade > 1 && Math.random() < 0.1) un = pick(unitsOf(u.grade - 1)); // 이전 학년 복습 한 스푼
+    items.push({ unitId: un.id, g: un.g, d: null, prob: null });
   }
   startSession(shuffle(items), 'daily', '오늘의 연산');
 }
 function startSession(items, mode, title) {
-  App.session = { items, mode, title, idx: 0, results: [], startedAt: Date.now(), qStart: Date.now(), attempt: 0 };
+  App.session = { items, mode, title, idx: 0, results: [], startedAt: Date.now(), qStart: Date.now(), attempt: 0, seen: new Set() };
   renderSolve();
 }
 
@@ -1886,7 +2221,9 @@ const CHEER = ['괜찮아요, 틀리면서 배우는 거예요 😊', '아쉬워
 let ansPad = null, scratchPad = null, lastRec = null, recTimer = null;
 function renderSolve() {
   cleanupView(); App.view = 'solve'; HW.init();
-  const S = App.session, it = S.items[S.idx], un = unitById(it.unitId), p = it.prob;
+  const S = App.session, it = S.items[S.idx], un = unitById(it.unitId);
+  if (!it.prob) { it.d = unitLevel(App.user, it.unitId); it.prob = genUnique(un, it.d, S.seen || (S.seen = new Set())); }
+  const p = it.prob;
   S.qStart = Date.now(); S.attempt = 0; lastRec = null;
   $('#app').innerHTML = `
   <div class="max-w-6xl mx-auto px-3 sm:px-5 pt-3 fade-in">
@@ -2009,7 +2346,9 @@ function submitAnswer() {
   S.attempt++;
   const secs = (Date.now() - S.qStart) / 1000, first = S.attempt === 1;
   if (first) {
-    recordResult(u, it, res.status === 'correct', secs);
+    const lvEv = recordResult(u, it, res.status === 'correct', secs), un2 = unitById(it.unitId);
+    if (lvEv === 'up') setTimeout(() => { confetti(24); toast(`🔺 레벨 업! ${un2.name}: ${LEVELS[it.d]} → ${LEVELS[unitLevel(u, it.unitId)]}`, 3000); }, 300);
+    if (lvEv === 'down') setTimeout(() => toast(`🔻 ${un2.name}: 한 단계 쉬운 문제로 다져 볼게요 (${LEVELS[unitLevel(u, it.unitId)]})`, 3000), 300);
     S.results[S.idx] = { correct: res.status === 'correct', user: input, retried: false };
     if (res.status !== 'correct') addWrongNote(u, it, input);
     else if (it.noteId) { const n = u.wrong.find((w) => w.id === it.noteId); if (n) { n.resolved = true; n.resolvedAt = Date.now(); } }
@@ -2113,7 +2452,7 @@ function renderResult() {
   $('#r-again').addEventListener('click', () => {
     if (S.mode === 'daily') return startDaily();
     if (S.mode === 'review') return renderNotes();
-    const it = S.items[0], un = unitById(it.unitId); startSession(makeItems(un, unitLevel(u, un.id), S.items.length), 'custom', un.name);
+    const it = S.items[0], un = unitById(it.unitId); startSession(makeItems(un, S.fixedD != null ? S.fixedD : 'auto', S.items.length), 'custom', un.name); App.session.fixedD = S.fixedD;
   });
 }
 
@@ -2185,11 +2524,14 @@ function openSettings() {
   modal(`<h3 class="font-jua text-2xl text-ink-700 mb-4">⚙️ 설정</h3>
     <div class="space-y-5">
       <div><div class="text-sm text-ink-500 mb-2">학년</div><select id="set-grade" class="w-full px-4 py-3 rounded-2xl bg-lav-50 border border-lav-100 font-jua">${GRADE_LONG.slice(1).map((g, i) => `<option value="${i + 1}" ${u.grade === i + 1 ? 'selected' : ''}>${g}</option>`).join('')}</select></div>
+      <div><div class="text-sm text-ink-500 mb-2">난이도</div><div class="flex gap-2 flex-wrap">${[['auto', '자동 (추천)'], ['0', '하'], ['1', '중'], ['2', '상'], ['3', '최상']].map(([v, l]) => `<button data-lv="${v}" class="btn lvopt px-4 py-2 rounded-xl font-jua ${String(s.level) === v ? 'bg-lav-400 text-white' : 'bg-lav-50 text-ink-600'}">${l}</button>`).join('')}</div>
+        <div class="text-xs text-ink-400 mt-1">자동: 새 단원은 '중'에서 시작 → 3문제 연속 정답이면 한 단계 위, 2문제 연속 오답이면 한 단계 아래</div></div>
       <div><div class="text-sm text-ink-500 mb-2">하루 목표 문제 수</div>${seg('dailyGoal', [10, 20, 30, 50], s.dailyGoal)}</div>
       <div><div class="text-sm text-ink-500 mb-2">한 번에 푸는 문제 수 (오늘의 연산)</div>${seg('sessionSize', [5, 10, 15, 20], s.sessionSize)}</div>
       <div class="rounded-2xl bg-lav-50/60 p-3">
         ${tog('autoRecognize', '펜을 떼면 자동 인식', '답을 쓰고 잠시 멈추면 자동으로 숫자로 바꿔요')}
         ${tog('penOnly', '펜 전용 모드 (손바닥 무시)', '스타일러스를 쓰면 손가락·손바닥 터치를 무시해요')}
+        ${tog('stretch', '한 학년 위 문제 섞기', '오늘의 연산에 다음 학년 단원을 30% 정도 섞어서 도전해요')}
       </div>
       <div class="rounded-2xl bg-butter-50 p-3 text-sm text-ink-600 flex items-center gap-2">✍️ 학습된 내 글씨 샘플 <b>${hwN}</b>개 <button id="hw-reset" class="ml-auto px-3 py-1.5 rounded-xl bg-white text-rose-400">초기화</button></div>
       <div class="rounded-2xl border border-lav-100 p-3"><div class="text-sm text-ink-500 mb-2">📦 기록 백업 / 복원 (JSON)</div>
@@ -2202,6 +2544,7 @@ function openSettings() {
     onMount: () => {
       $$('.setopt').forEach((b) => b.addEventListener('click', () => { s[b.dataset.set] = +b.dataset.v; $$(`.setopt[data-set="${b.dataset.set}"]`).forEach((x) => { const on = x === b; x.className = `btn setopt px-4 py-2 rounded-xl font-jua ${on ? 'bg-lav-400 text-white' : 'bg-lav-50 text-ink-600'}`; }); }));
       $$('[data-tog]').forEach((c) => c.addEventListener('change', () => { s[c.dataset.tog] = c.checked; }));
+      $$('.lvopt').forEach((b) => b.addEventListener('click', () => { s.level = b.dataset.lv === 'auto' ? 'auto' : +b.dataset.lv; $$('.lvopt').forEach((x) => { x.className = `btn lvopt px-4 py-2 rounded-xl font-jua ${x === b ? 'bg-lav-400 text-white' : 'bg-lav-50 text-ink-600'}`; }); }));
       $('#hw-reset').addEventListener('click', () => askConfirm('학습된 글씨 샘플을 모두 지울까요?', () => { u.hw = {}; save(); toast('초기화했어요'); }, '지우기'));
       $('#exp').addEventListener('click', async () => {
         const json = JSON.stringify(u);
